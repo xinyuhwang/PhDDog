@@ -60,6 +60,8 @@ class School(TimestampMixin, Base):
     primary_domain: Mapped[str | None] = mapped_column(String)
     website: Mapped[str | None] = mapped_column(String)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Candidate matches to offer when the school couldn't be identified confidently.
+    suggestions: Mapped[list] = mapped_column(JSONB, default=list)
 
     professors: Mapped[list["Professor"]] = relationship(back_populates="school")
 

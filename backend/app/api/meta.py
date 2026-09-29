@@ -1,13 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUser
-from app.api.schemas import JobOut, SchoolIn, SchoolOut
+from app.api.schemas import JobOut, SchoolConfirmIn, SchoolOut
 from app.config import get_settings
-from app.db.models import Job, School
+from app.db.models import Job, Professor, School
 from app.llm import get_llm
+from app.services.schools import confirm_school
 
 router = APIRouter(tags=["meta"])
 
@@ -36,15 +37,18 @@ def get_job(job_id: uuid.UUID, db: DB):
 
 @router.get("/schools", response_model=list[SchoolOut])
 def list_schools(db: DB, user: CurrentUser):
-    return db.scalars(select(School).where(School.user_id == user.id).order_by(School.name)).all()
+    counts = dict(db.execute(select(Professor.school_id, func.count()).group_by(Professor.school_id)).all())
+    schools = db.scalars(select(School).where(School.user_id == user.id).order_by(School.name)).all()
+    return [SchoolOut.model_validate(s).model_copy(update={"professor_count": counts.get(s.id, 0)}) for s in schools]
 
 
-@router.patch("/schools/{school_id}", response_model=SchoolOut)
-def patch_school(school_id: uuid.UUID, body: SchoolIn, db: DB, user: CurrentUser):
+@router.post("/schools/{school_id}/confirm", response_model=SchoolOut)
+def confirm(school_id: uuid.UUID, body: SchoolConfirmIn, db: DB, user: CurrentUser):
+    """Say which school this is. Merges into an existing school if the name matches one."""
     school = db.get(School, school_id)
     if school is None or school.user_id != user.id:
         raise HTTPException(404)
-    for k, v in body.model_dump(exclude_unset=True).items():
-        setattr(school, k, v)
-    db.commit()
-    return school
+    try:
+        return confirm_school(db, user, school, body.name, body.primary_domain, body.aliases)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e

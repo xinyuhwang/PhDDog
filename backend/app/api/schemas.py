@@ -40,13 +40,14 @@ class SchoolOut(ORM):
     aliases: list[str]
     primary_domain: str | None
     confirmed: bool
+    suggestions: list[dict]
+    professor_count: int = 0
 
 
-class SchoolIn(BaseModel):
-    name: str | None = None
-    aliases: list[str] | None = None
+class SchoolConfirmIn(BaseModel):
+    name: str
     primary_domain: str | None = None
-    confirmed: bool | None = None
+    aliases: list[str] = []
 
 
 class CandidateOut(ORM):

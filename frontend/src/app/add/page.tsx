@@ -7,7 +7,11 @@ import { Badge, Button, Card, ErrorNote, inputClass, ResolveBadge } from "@/comp
 import { api, type ParsedEntry, type ProfessorSummary } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
-type School = { id: string; name: string; aliases: string[]; primary_domain: string | null; confirmed: boolean };
+type Suggestion = { name: string; aliases: string[]; primary_domain: string | null; country: string | null };
+type School = {
+  id: string; name: string; aliases: string[]; primary_domain: string | null; confirmed: boolean;
+  suggestions: Suggestion[]; professor_count: number;
+};
 
 const EXAMPLE = `Jacob Gardner (UPenn CIS)
 Mark Yatskar, UPenn
@@ -63,7 +67,7 @@ export default function AddPage() {
 
   const addable = entries?.filter((e) => e.name && e.school_raw && !e.issues.includes("duplicate")).length ?? 0;
   const attention = profs.data?.filter((p) => p.resolve_status !== "resolved") ?? [];
-  const unconfirmed = schools.data?.filter((s) => !s.confirmed) ?? [];
+  const unconfirmedCount = schools.data?.filter((s) => !s.confirmed).length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -110,10 +114,14 @@ export default function AddPage() {
         )}
       </Card>
 
-      {unconfirmed.length > 0 && (
-        <Card title="Confirm new schools">
-          <p className="mb-3 text-sm text-stone-600">These schools weren&apos;t recognized. Add the web domain (e.g. <code>mit.edu</code>) so the app can check homepages belong to the right school.</p>
-          {unconfirmed.map((s) => <SchoolRow key={s.id} school={s} onSaved={schools.reload} />)}
+      {!!schools.data?.length && (
+        <Card title={unconfirmedCount ? `Your schools · ${unconfirmedCount} to confirm` : "Your schools"}>
+          <p className="mb-3 text-sm text-stone-600">
+            The web domain (e.g. <code>tamu.edu</code>) lets the app check that a homepage belongs to the right school.
+          </p>
+          <ul className="divide-y divide-stone-100">
+            {schools.data.map((s) => <SchoolRow key={s.id} school={s} onSaved={() => { schools.reload(); profs.reload(); }} />)}
+          </ul>
         </Card>
       )}
 
@@ -129,13 +137,61 @@ export default function AddPage() {
 }
 
 function SchoolRow({ school, onSaved }: { school: School; onSaved: () => void }) {
+  const [editing, setEditing] = useState(!school.confirmed);
+  const [name, setName] = useState(school.name);
   const [domain, setDomain] = useState(school.primary_domain ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm(body: { name: string; primary_domain: string | null; aliases?: string[] }) {
+    setError(null);
+    try {
+      await api.post(`/schools/${school.id}/confirm`, body);
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-2 py-1 text-sm">
-      <span className="w-64 font-medium">{school.name}</span>
-      <input className={`${inputClass} w-48 py-1`} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="school.edu" />
-      <Button variant="secondary" onClick={async () => { await api.patch(`/schools/${school.id}`, { primary_domain: domain || null, confirmed: true }); onSaved(); }}>Confirm</Button>
-    </div>
+    <li className="py-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{school.name}</span>
+        {school.primary_domain ? <code className="text-xs text-stone-500">{school.primary_domain}</code> : <Badge tone="yellow">no domain</Badge>}
+        {!school.confirmed && <Badge tone="red">Not recognized</Badge>}
+        <span className="text-xs text-stone-400">{school.professor_count} professor{school.professor_count === 1 ? "" : "s"}{school.aliases.length ? ` · also: ${school.aliases.join(", ")}` : ""}</span>
+        {!editing && <button className="text-xs text-indigo-600 hover:underline" onClick={() => setEditing(true)}>edit</button>}
+      </div>
+
+      {editing && (
+        <div className="mt-2 space-y-2 rounded-md bg-stone-50 p-3">
+          {school.suggestions.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs text-stone-600">Did you mean:</div>
+              <div className="flex flex-wrap gap-2">
+                {school.suggestions.map((sg) => (
+                  <Button key={sg.name} variant="secondary" onClick={() => confirm({ name: sg.name, primary_domain: sg.primary_domain, aliases: sg.aliases })}>
+                    {sg.name}{sg.primary_domain ? ` (${sg.primary_domain})` : ""}{sg.country && sg.country !== "US" ? ` · ${sg.country}` : ""}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-stone-600">Full school name
+              <input className={`${inputClass} mt-1 w-72 py-1`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Texas A&M University" />
+            </label>
+            <label className="text-xs text-stone-600">Web domain
+              <input className={`${inputClass} mt-1 w-48 py-1`} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="tamu.edu" />
+            </label>
+            <Button disabled={!name.trim()} onClick={() => confirm({ name, primary_domain: domain || null })}>Save</Button>
+            {school.confirmed && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
+          </div>
+          <p className="text-xs text-stone-500">If the name matches a school you already have, the two are merged and what you typed is remembered as a nickname.</p>
+          <ErrorNote error={error} />
+        </div>
+      )}
+    </li>
   );
 }
 

@@ -13,8 +13,8 @@ from app.ingest.fetch import FetchResult, fetch
 from app.ingest.html import html_to_text, subpage_links
 from app.llm import get_llm
 from app.llm.schemas import ExtractedProfile, PageText, ParsedEntry
-from app.schools_catalog import builtin_aliases
 from app.services.jobs import enqueue, handler
+from app.services.schools import get_or_create_school, known_aliases
 from app.storage.local import save_bytes, sha256
 
 AUTO_ACCEPT_CONFIDENCE = 0.8
@@ -28,35 +28,6 @@ EXTRACTED_FIELDS = [
 
 def normalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z\s-]", "", name.lower())).strip()
-
-
-# --- schools -----------------------------------------------------------------------
-
-
-def known_aliases(db: Session, user: User) -> dict[str, str]:
-    aliases = builtin_aliases()
-    for school in db.scalars(select(School).where(School.user_id == user.id)):
-        aliases[school.name.lower()] = school.name
-        for a in school.aliases:
-            aliases[a.lower()] = school.name
-    return aliases
-
-
-def get_or_create_school(db: Session, user: User, school_raw: str) -> School:
-    canonical = known_aliases(db, user).get(school_raw.strip().lower(), school_raw.strip())
-    school = db.scalar(select(School).where(School.user_id == user.id, School.name == canonical))
-    if school:
-        return school
-    info = get_llm().normalize_school(canonical)
-    school = db.scalar(select(School).where(School.user_id == user.id, School.name == info.name))
-    if school is None:
-        school = School(
-            user_id=user.id, name=info.name, aliases=info.aliases, primary_domain=info.primary_domain,
-            confirmed=info.known,
-        )
-        db.add(school)
-        db.flush()
-    return school
 
 
 # --- parse + add -------------------------------------------------------------------
