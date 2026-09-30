@@ -40,7 +40,7 @@ export default function PapersPanel({ professorId, onJob, busy }: { professorId:
   const summarized = papers.data?.filter((p) => p.summary).length ?? 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div id="papers" className="grid scroll-mt-4 gap-6 lg:grid-cols-2">
       <Card title="Their papers">
         <p className="mb-3 text-sm text-stone-600">Add recent papers (ideally this year and last) as a PDF or a link — arXiv, bioRxiv/medRxiv, PubMed, DOI, or any article page.</p>
         <div className="flex gap-2">

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ContactBadge, ErrorNote, FitBadge, inputClass, Quote, RecruitingBadge, ResolveBadge, StageBadge } from "@/components/ui";
+import { Badge, Button, Card, ContactBadge, ErrorNote, FitBadge, inputClass, PinButton, Quote, RecruitingBadge, ResolveBadge, StageBadge } from "@/components/ui";
 import { api, type Job, type ProfessorDetail } from "@/lib/api";
 import { useApi, useShowFit } from "@/lib/hooks";
 
@@ -18,6 +18,11 @@ export default function ProfessorPage() {
   const { data: prof, error, reload } = useApi<ProfessorDetail>(`/professors/${id}`, (p) => p.resolve_status === "pending" || busy);
   const [editing, setEditing] = useState(false);
   const showFit = useShowFit();
+  const loaded = !!prof;
+  useEffect(() => {
+    // Content renders after data loads, so a #papers / #email link needs a scroll once it's there.
+    if (loaded && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+  }, [loaded]);
 
   if (error) return <ErrorNote error={error} />;
   if (!prof) return <p className="text-sm text-stone-500">Loading…</p>;
@@ -33,6 +38,8 @@ export default function ProfessorPage() {
           <h1 className="mt-1 text-2xl font-semibold">{prof.name}</h1>
           <p className="text-sm text-stone-600">{[prof.title, prof.department, prof.school_name].filter(Boolean).join(" · ")}</p>
           <div className="mt-2 flex flex-wrap gap-3 text-sm">
+            <a href="#papers" className="font-medium text-indigo-600 hover:underline">↓ Papers</a>
+            <a href="#email" className="font-medium text-indigo-600 hover:underline">↓ Email</a>
             {prof.homepage_url && <a className="text-indigo-600 hover:underline" href={prof.homepage_url} target="_blank" rel="noreferrer">Homepage ↗</a>}
             {prof.lab_url && <a className="text-indigo-600 hover:underline" href={prof.lab_url} target="_blank" rel="noreferrer">Lab ↗</a>}
             {prof.email && <span className="text-stone-700">{prof.email}</span>}
@@ -41,8 +48,9 @@ export default function ProfessorPage() {
         <div className="flex flex-wrap items-center gap-2">
           <ResolveBadge status={prof.resolve_status} />
           <StageBadge status={prof.status} />
-          {["added", "resolved", "screened"].includes(prof.status) && <Button onClick={() => setStatus("shortlisted")}>☆ Shortlist</Button>}
-          {prof.status === "shortlisted" && <Button variant="secondary" onClick={() => setStatus("screened")}>★ Shortlisted</Button>}
+          {["added", "resolved", "screened", "shortlisted"].includes(prof.status) && (
+            <PinButton pinned={prof.status === "shortlisted"} onClick={() => setStatus(prof.status === "shortlisted" ? "screened" : "shortlisted")} />
+          )}
           {prof.status !== "dismissed"
             ? <Button variant="secondary" onClick={() => setStatus("dismissed")}>Dismiss</Button>
             : <Button variant="secondary" onClick={() => setStatus("screened")}>Restore</Button>}

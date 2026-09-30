@@ -41,7 +41,7 @@ const STAGES: Record<string, [Tone, string, string]> = {
   added: ["blue", "Looking up", "Finding and reading their homepage"],
   resolved: ["gray", "New", "Homepage read; not shortlisted yet"],
   screened: ["gray", "New", "Homepage read; not shortlisted yet"],
-  shortlisted: ["blue", "Shortlisted", "Next: add their recent papers"],
+  shortlisted: ["blue", "Pinned", "Next: add their recent papers"],
   analyzed: ["blue", "Papers analyzed", "Next: draft an email"],
   drafted: ["yellow", "Email drafted", "Next: send it and mark as sent"],
   contacted: ["green", "Contacted", "Email sent; waiting for a reply"],
@@ -50,7 +50,7 @@ const STAGES: Record<string, [Tone, string, string]> = {
   dismissed: ["gray", "Dismissed", "Hidden from the list by default"],
 };
 
-/** Where this professor is in your outreach: Looking up → New → Shortlisted → Papers analyzed → Email drafted → Contacted → Replied. */
+/** Where this professor is in your outreach: Looking up → New → Pinned → Papers analyzed → Email drafted → Contacted → Replied. */
 export function StageBadge({ status }: { status: string }) {
   const [tone, text, hint] = STAGES[status] ?? ["gray", status, ""];
   return <Badge tone={tone} title={hint}>{text}</Badge>;
@@ -109,6 +109,17 @@ export function Button({
   return (
     <button type={type} onClick={onClick} disabled={disabled} className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${styles}`}>
       {children}
+    </button>
+  );
+}
+
+/** Shortlist toggle: 📌 at full color when pinned, faded when not. Hover shows "Pin" / "Unpin". */
+export function PinButton({ pinned, onClick }: { pinned: boolean; onClick: () => void }) {
+  const label = pinned ? "Unpin" : "Pin";
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} aria-pressed={pinned}
+      className={`rounded-md px-1.5 py-0.5 text-lg leading-none transition hover:bg-stone-100 ${pinned ? "" : "opacity-30 grayscale hover:opacity-70"}`}>
+      📌
     </button>
   );
 }

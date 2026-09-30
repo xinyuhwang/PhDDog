@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Button, Card, ContactBadge, ErrorNote, FitBadge, RecruitingBadge, ResolveBadge, StageBadge, inputClass } from "@/components/ui";
+import { Button, Card, ContactBadge, ErrorNote, FitBadge, PinButton, RecruitingBadge, ResolveBadge, StageBadge, inputClass } from "@/components/ui";
 import { api, type Job, type ProfessorSummary, type Profile } from "@/lib/api";
 import { useApi, useShowFit } from "@/lib/hooks";
 
@@ -108,11 +108,16 @@ export default function ProfessorsPage() {
                   <td className="pr-3"><ContactBadge policy={p.contact_policy} /></td>
                   <td className="pr-3"><StageBadge status={p.status} /></td>
                   <td className="whitespace-nowrap">
-                    {EARLY_STAGES.includes(p.status) && (
-                      <Button variant={p.status === "shortlisted" ? "primary" : "secondary"} onClick={() => toggleShortlist(p)}>
-                        {p.status === "shortlisted" ? "★ Shortlisted" : "☆ Shortlist"}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {EARLY_STAGES.includes(p.status) && (
+                        <PinButton pinned={p.status === "shortlisted"} onClick={() => toggleShortlist(p)} />
+                      )}
+                      {p.status !== "dismissed" && (
+                        <Link href={`/professors/${p.id}#papers`} className="text-sm font-medium text-indigo-600 hover:underline">
+                          {["shortlisted", "added", "resolved", "screened"].includes(p.status) ? "Add papers →" : "Open →"}
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
