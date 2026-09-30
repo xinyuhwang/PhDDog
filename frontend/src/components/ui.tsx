@@ -37,8 +37,27 @@ const RESOLVE: Record<string, [Tone, string]> = {
   not_found: ["red", "Not found"],
 };
 
+const STAGES: Record<string, [Tone, string, string]> = {
+  added: ["blue", "Looking up", "Finding and reading their homepage"],
+  resolved: ["gray", "New", "Homepage read; not shortlisted yet"],
+  screened: ["gray", "New", "Homepage read; not shortlisted yet"],
+  shortlisted: ["blue", "Shortlisted", "Next: add their recent papers"],
+  analyzed: ["blue", "Papers analyzed", "Next: draft an email"],
+  drafted: ["yellow", "Email drafted", "Next: send it and mark as sent"],
+  contacted: ["green", "Contacted", "Email sent; waiting for a reply"],
+  replied: ["green", "Replied", "They replied"],
+  closed: ["gray", "Closed", "Declined or no longer pursuing"],
+  dismissed: ["gray", "Dismissed", "Hidden from the list by default"],
+};
+
+/** Where this professor is in your outreach: Looking up → New → Shortlisted → Papers analyzed → Email drafted → Contacted → Replied. */
+export function StageBadge({ status }: { status: string }) {
+  const [tone, text, hint] = STAGES[status] ?? ["gray", status, ""];
+  return <Badge tone={tone} title={hint}>{text}</Badge>;
+}
+
 export function FitBadge({ label, reason }: { label?: string; reason?: string }) {
-  if (!label) return <Badge>Not screened</Badge>;
+  if (!label) return <Badge title="Needs your profile and the professor's research interests">Not screened</Badge>;
   const [tone, text] = FIT[label] ?? ["gray", label];
   return <Badge tone={tone} title={reason}>{text}</Badge>;
 }

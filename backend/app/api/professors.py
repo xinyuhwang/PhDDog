@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -55,6 +55,8 @@ def list_professors(db: DB, user: CurrentUser):
 
 @router.post("/screen", status_code=202)
 def screen(db: DB, user: CurrentUser):
+    if active_profile(db, user) is None:
+        raise HTTPException(400, "Add your resume or a research statement on My profile first, so there is something to compare against.")
     request_screen(db, user)
     return {"queued": True}
 

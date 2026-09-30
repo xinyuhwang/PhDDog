@@ -54,6 +54,39 @@ MODALITY_TERMS = [
     "imaging", "video", "speech", "social media", "text", "protein sequences", "molecular graphs",
 ]
 
+# Terms so common in CS/health research that sharing them says little about fit.
+GENERIC_TERMS = {
+    "machine learning", "deep learning", "neural network", "optimization", "probabilistic", "statistical learning",
+    "ai agents", "health", "medical", "biology", "chemistry", "text", "images", "imaging", "sensor", "patient",
+}
+# Different words for the same field: a match within a family counts as a related (partial) match.
+TERM_FAMILIES = {
+    "health & medicine": {
+        "healthcare", "health", "medicine", "medical", "clinical", "patient", "hospital", "biomedical",
+        "electronic health records", "ehr", "surgery", "digital health", "mobile health", "public health",
+        "mental health", "precision medicine", "epidemiology", "cardiology", "oncology", "cancer", "ophthalmology",
+    },
+    "biology & drug discovery": {
+        "genomics", "single-cell", "proteomics", "computational biology", "bioinformatics", "molecule", "molecular",
+        "protein design", "drug discovery", "therapeutics", "biology", "biotech", "protein language model",
+    },
+    "medical imaging": {"medical imaging", "radiology", "pathology", "mri", "ct", "x-ray", "segmentation", "imaging"},
+    "language & LLMs": {
+        "nlp", "natural language processing", "llm", "large language model", "language model", "transformer",
+        "clinical notes", "retrieval-augmented generation",
+    },
+}
+
+SYNONYMS = {
+    "electronic health records": "ehr", "natural language processing": "nlp", "large language model": "llm",
+    "language model": "llm", "explainability": "explainable ai", "medicine": "medical",
+}
+
+
+def _canonical(terms: set[str]) -> set[str]:
+    return {SYNONYMS.get(t, t) for t in terms}
+
+
 _TERM_RE = {t: re.compile(rf"\b{re.escape(t)}s?\b", re.IGNORECASE) for t in {*METHOD_TERMS, *DOMAIN_TERMS, *MODALITY_TERMS}}
 
 
@@ -329,20 +362,31 @@ class FakeLLM:
         self, profile: StructuredProfile, keywords: list[str], research_statement: str | None,
         professor_interests: str,
     ) -> ScreenOutput:
-        vocab = METHOD_TERMS + DOMAIN_TERMS
-        user_terms = set(profile.methods) | set(profile.domains) | set(find_terms(" ".join(keywords) + " " + (research_statement or ""), vocab))
-        user_terms |= {k.lower() for k in keywords if k.lower() in professor_interests.lower()}
-        prof_terms = set(find_terms(professor_interests, vocab)) | {k.lower() for k in keywords if k.lower() in professor_interests.lower()}
-        overlap = sorted(user_terms & prof_terms)
-        score = round(len(overlap) / max(1, len(prof_terms)), 2)
-        if len(overlap) >= 3 or (overlap and score >= 0.5):
-            label = "strong"
-        elif overlap:
-            label = "possible"
-        else:
-            label = "no"
-        reason = f"[FAKE] Shared terms: {', '.join(overlap)}" if overlap else "[FAKE] No shared terms found"
-        return ScreenOutput(label=label, score=score, reason=reason)
+        vocab = METHOD_TERMS + DOMAIN_TERMS + MODALITY_TERMS
+        user_text = " ".join(keywords) + " " + (research_statement or "")
+        user_terms = _canonical(set(profile.methods) | set(profile.domains) | set(find_terms(user_text, vocab)))
+        prof_terms = _canonical(set(find_terms(professor_interests, vocab)))
+        # The user's own keywords count even if they aren't in the built-in vocabulary.
+        own = {k.lower() for k in keywords if len(k) > 2 and k.lower() in professor_interests.lower()}
+
+        shared = (user_terms & prof_terms) | own
+        weight = sum(0.5 if t in GENERIC_TERMS else 2 for t in shared)
+        related = [
+            name for name, family in TERM_FAMILIES.items()
+            if family & prof_terms and family & user_terms and not (family & shared) - GENERIC_TERMS
+        ]
+        weight += len(related)
+
+        label = "strong" if weight >= 3 else "possible" if weight >= 1.5 else "no"
+        parts = []
+        if specific := sorted(t for t in shared if t not in GENERIC_TERMS):
+            parts.append(f"shared: {', '.join(specific)}")
+        if generic := sorted(t for t in shared if t in GENERIC_TERMS):
+            parts.append(f"broad overlap: {', '.join(generic)}")
+        if related:
+            parts.append(f"related fields: {', '.join(related)}")
+        reason = "[FAKE] " + ("; ".join(parts).capitalize() if parts else "No shared research terms found")
+        return ScreenOutput(label=label, score=round(min(1.0, weight / 6), 2), reason=reason)
 
     # --- Stage 3 --------------------------------------------------------------------
 

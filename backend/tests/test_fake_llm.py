@@ -77,3 +77,15 @@ def test_screen_labels():
     strong = llm.screen_professor(profile, [], None, "Deep learning for radiology and medical imaging.")
     none = llm.screen_professor(profile, [], None, "Cryptography and zero-knowledge proofs.")
     assert strong.label == "strong" and none.label == "no"
+
+
+def test_screen_generic_terms_alone_are_not_strong():
+    profile = StructuredProfile(methods=["machine learning", "optimization"], domains=["healthcare", "ehr"])
+    generic = llm.screen_professor(profile, [], None, "Probabilistic machine learning and Bayesian optimization.")
+    assert generic.label == "no"
+
+
+def test_screen_synonyms_and_related_fields():
+    profile = StructuredProfile(methods=["machine learning"], domains=["healthcare", "ehr"])
+    ehr = llm.screen_professor(profile, [], None, "AI for public health using electronic health records.")
+    assert ehr.label in ("possible", "strong") and "ehr" in ehr.reason

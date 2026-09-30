@@ -5,6 +5,7 @@ from app.db.models import User, UserProfile
 from app.ingest.pdf import extract_pdf
 from app.llm import get_llm
 from app.llm.schemas import StructuredProfile
+from app.services.jobs import enqueue
 from app.storage.local import save_bytes, sha256
 
 
@@ -35,6 +36,9 @@ def _new_version(db: Session, user: User, **changes) -> UserProfile:
         structured_profile=structured_profile.model_dump(), **fields,
     )
     db.add(profile)
+    db.flush()
+    # Screening results belong to a profile version, so every new version re-screens everyone.
+    enqueue(db, "screen_all", user_id=user.id)
     db.commit()
     return profile
 

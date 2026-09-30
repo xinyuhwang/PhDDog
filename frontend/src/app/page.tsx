@@ -4,17 +4,20 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui";
 import type { Outreach, ProfessorSummary, Profile } from "@/lib/api";
-import { useApi } from "@/lib/hooks";
+import { useApi, useShowFit } from "@/lib/hooks";
 
 export default function Dashboard() {
   const { data: profile } = useApi<Profile | null>("/profile");
   const { data: profs } = useApi<ProfessorSummary[]>("/professors");
   const { data: due } = useApi<Outreach[]>("/outreach?due=true");
 
+  const showFit = useShowFit();
   const count = (f: (p: ProfessorSummary) => boolean) => profs?.filter(f).length ?? 0;
   const stats = [
     { label: "Professors", value: profs?.length ?? 0, href: "/professors" },
-    { label: "Strong fit", value: count((p) => p.screen?.label === "strong"), href: "/professors" },
+    showFit
+      ? { label: "Strong fit", value: count((p) => p.screen?.label === "strong"), href: "/professors" }
+      : { label: "Shortlisted", value: count((p) => p.status === "shortlisted"), href: "/professors" },
     { label: "Needs review", value: count((p) => ["needs_review", "not_found"].includes(p.resolve_status)), href: "/add" },
     { label: "Contacted", value: count((p) => ["contacted", "replied", "closed"].includes(p.status)), href: "/outreach" },
   ];

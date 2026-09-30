@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
-import { Badge, Button, Card, ContactBadge, ErrorNote, FitBadge, inputClass, Quote, RecruitingBadge, ResolveBadge } from "@/components/ui";
+import { Badge, Button, Card, ContactBadge, ErrorNote, FitBadge, inputClass, Quote, RecruitingBadge, ResolveBadge, StageBadge } from "@/components/ui";
 import { api, type Job, type ProfessorDetail } from "@/lib/api";
-import { useApi } from "@/lib/hooks";
+import { useApi, useShowFit } from "@/lib/hooks";
 
 import EmailPanel from "./EmailPanel";
 import PapersPanel from "./PapersPanel";
@@ -17,6 +17,7 @@ export default function ProfessorPage() {
   const busy = !!jobs.data?.some((j) => j.status !== "failed" && j.payload.professor_id === id);
   const { data: prof, error, reload } = useApi<ProfessorDetail>(`/professors/${id}`, (p) => p.resolve_status === "pending" || busy);
   const [editing, setEditing] = useState(false);
+  const showFit = useShowFit();
 
   if (error) return <ErrorNote error={error} />;
   if (!prof) return <p className="text-sm text-stone-500">Loading…</p>;
@@ -39,7 +40,7 @@ export default function ProfessorPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ResolveBadge status={prof.resolve_status} />
-          <span className="text-xs capitalize text-stone-500">Stage: {prof.status}</span>
+          <StageBadge status={prof.status} />
           {["added", "resolved", "screened"].includes(prof.status) && <Button onClick={() => setStatus("shortlisted")}>☆ Shortlist</Button>}
           {prof.status === "shortlisted" && <Button variant="secondary" onClick={() => setStatus("screened")}>★ Shortlisted</Button>}
           {prof.status !== "dismissed"
@@ -75,8 +76,10 @@ export default function ProfessorPage() {
         <Card title="Research" actions={<Button variant="secondary" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</Button>}>
           {editing ? <EditDetails prof={prof} onSaved={() => { setEditing(false); reload(); }} /> : (
             <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2"><span className="font-medium">Fit</span><FitBadge label={prof.screen?.label} reason={prof.screen?.reason} />
-                {prof.screen && <span className="text-xs text-stone-500">{prof.screen.reason}</span>}</div>
+              {showFit && (
+                <div className="flex items-center gap-2"><span className="font-medium">Fit</span><FitBadge label={prof.screen?.label} reason={prof.screen?.reason} />
+                  {prof.screen && <span className="text-xs text-stone-500">{prof.screen.reason}</span>}</div>
+              )}
               <p className="text-stone-700">{prof.stated_interests ?? <span className="text-stone-400">No research interests extracted.</span>}</p>
               {prof.bio_summary && <p className="text-stone-500">{prof.bio_summary}</p>}
               {prof.user_overrides.length > 0 && <p className="text-xs text-stone-500">Edited by you (kept on re-check): {prof.user_overrides.join(", ")}</p>}

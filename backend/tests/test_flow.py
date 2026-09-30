@@ -67,6 +67,8 @@ def run_jobs():
 
 
 def test_full_flow(client):
+    assert client.post("/professors/screen").status_code == 400  # no profile yet
+
     r = client.post("/profile/resume", files={"file": ("cv.pdf", make_pdf(RESUME), "application/pdf")})
     assert r.status_code == 200, r.text
     assert "medical imaging" in r.json()["structured_profile"]["domains"]
