@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import HomepageCandidate, Professor, School, SourcePage, User
 from app.ingest.fetch import FetchResult, fetch
-from app.ingest.html import html_to_text, subpage_links
+from app.ingest.html import html_to_text, own_site_links, subpage_links
 from app.llm import get_llm
 from app.llm.schemas import ExtractedProfile, PageText, ParsedEntry
 from app.services.jobs import enqueue, handler
@@ -182,15 +182,27 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
         prof.resolve_status, prof.resolve_error = "not_found", f"Homepage fetch failed: {home.error}"
         return
     pages = [home]
-    for url in subpage_links(home_html or "", home.final_url or home.url, settings.max_subpages):
+    base = home.final_url or home.url
+    for url in subpage_links(home_html or "", base, settings.max_subpages):
         page, _ = load(url, "subpage")
         if page.fetch_status == "ok":
             pages.append(page)
+    # A directory profile often links to the professor's own site ("Website", "Lab"); read its front page too.
+    linked = own_site_links(home_html or "", base)
+    for url in linked:
+        page, _ = load(url, "linked_site")
+        if page.fetch_status == "ok":
+            pages.append(page)
+    # Drop pages from earlier crawls that this crawl no longer reaches.
+    for stale in set(existing.values()) - set(pages):
+        db.delete(stale)
     db.flush()
 
     page_texts = [PageText(url=p.final_url or p.url, text=p.text or "", kind=p.kind) for p in pages]
     extracted = get_llm().extract_profile(page_texts, prof.name, prof.school.primary_domain)
     _drop_unverified_quotes(extracted, page_texts)
+    if linked and not extracted.lab_url:
+        extracted.lab_url = linked[0]
     _apply_extracted(prof, extracted)
 
     prof.resolve_status, prof.resolve_error = "resolved", None

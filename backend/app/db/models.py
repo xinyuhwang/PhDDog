@@ -139,7 +139,7 @@ class SourcePage(TimestampMixin, Base):
     professor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("professors.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(String)
     final_url: Mapped[str | None] = mapped_column(String)
-    kind: Mapped[str] = mapped_column(String)  # homepage | subpage | directory
+    kind: Mapped[str] = mapped_column(String)  # homepage | subpage | linked_site
     raw_html_path: Mapped[str | None] = mapped_column(String)
     text: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

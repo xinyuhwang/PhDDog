@@ -71,10 +71,33 @@ OBFUSCATED_EMAIL_RE = re.compile(
 CYCLE_RE = re.compile(r"\b(Fall|Spring|Autumn|Winter|Summer)\s+(20\d{2})\b", re.IGNORECASE)
 
 
+def _blocks(text: str) -> list[str]:
+    """Headings, list items and short labels stay separate; wrapped lines of one paragraph are joined."""
+    blocks: list[str] = []
+    current = ""
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        standalone = line.startswith(("## ", "- ")) or (
+            len(line) < 60 and not current and not re.search(r"[.!?,;:]$", line)
+        )
+        if not line or standalone:
+            if current:
+                blocks.append(current)
+            current = ""
+            if line:
+                blocks.append(re.sub(r"^(##|-)\s+", "", line))
+            continue
+        current = f"{current} {line}" if current else line
+    if current:
+        blocks.append(current)
+    return blocks
+
+
 def sentences(text: str) -> list[str]:
-    """Split on sentence punctuation and blank lines; single line breaks are often mid-sentence."""
-    parts = re.split(r"(?<=[.!?])\s+|\n\s*\n", text or "")
-    return [re.sub(r"\s+", " ", p).strip() for p in parts if len(p.strip()) > 3]
+    out = []
+    for block in _blocks(text):
+        out += [p.strip() for p in re.split(r"(?<=[.!?])\s+", block) if len(p.strip()) > 3]
+    return out
 
 
 def first_sentence_with(text: str, pattern: re.Pattern, min_len: int = 0) -> str | None:
@@ -219,12 +242,9 @@ class FakeLLM:
             depts += [d.strip() for d in dept_re.findall(p.text)]
         out.departments = list(dict.fromkeys(depts))[:3]
 
-        interest_re = re.compile(r"\b(research|interest|focus|work on|develop|my group|our lab|we study|i study)\b", re.I)
-        picks = [s for s in sentences(home.text) if 40 <= len(s) <= 400 and interest_re.search(s)][:3]
-        if not picks:
-            picks = [s for s in sentences(home.text) if len(s) >= 60][:2]
-        if picks:
-            out.stated_interests, out.field_sources["stated_interests"] = " ".join(picks), home.url
+        interests, source = _pick_interests(pages)
+        if interests:
+            out.stated_interests, out.field_sources["stated_interests"] = interests, source
 
         bio = first_sentence_with(home.text, re.compile(rf"{re.escape(name.split()[-1])}\b.*\bis an?\b", re.I), 30)
         if bio:
@@ -434,6 +454,115 @@ def _find_alias_inline(text: str, aliases: list[str]) -> tuple[str | None, str, 
 
 def _looks_like_school(text: str) -> bool:
     return bool(re.search(r"\b(university|institute|college|school of|polytechnic|univ\.?)\b", text, re.I))
+
+
+INTEREST_HEADING = re.compile(
+    r"^(research\s+(interests?|areas?|focus|topics|directions?)|areas?\s+of\s+(interest|expertise|research)|"
+    r"interests?|expertise|research\s+expertise|keywords|topics)\s*:?$", re.I,
+)
+PROSE_HEADING = re.compile(r"^(research|about( me)?|bio(graphy)?|overview|profile|summary|welcome)\s*:?$", re.I)
+INTEREST_PHRASE = re.compile(
+    r"\b(research interests?|my research|our research|(his|her|their|\w+'s) research|research (focuses|focus|centers|spans|lies|is)|"
+    r"interested in|works? on|working on|focus(es)? on|we (study|develop|build)|i (study|develop|build)|lab (studies|develops|focuses))\b",
+    re.I,
+)
+# Stricter than INTEREST_PHRASE: the professor describing their own research.
+OWN_RESEARCH = re.compile(
+    r"\b(my research|our research|(his|her|their|\w+'s) research|research (focuses|focus|centers|spans|lies|interests)|"
+    r"(i|we|he|she|they) (work|study|develop|build|focus)|my (work|group|lab)|our (lab|group))\b",
+    re.I,
+)
+NOT_INTERESTS = re.compile(
+    r"\b(award|prize|fellowship|received|joined|graduated|ph\.?\s?d\.? (from|in)|degree|b\.?s\.?|m\.?s\.?|undergrad\w*|"
+    r"prospective|course|teaching|office hours|e-?mail|phone|copyright|cookie|previously|postdoc|advised by|news|"
+    r"looking for|recruit\w*|join|apply)\b",
+    re.I,
+)
+
+
+OTHER_SECTION = re.compile(
+    r"^(education|awards?|honors|awards? (&|and) honors|biography|bio|(selected |recent )?publications|teaching|courses|contact|"
+    r"news|students|appointments|experience|service|links|videos?|media|in the news|affiliations|projects|people|"
+    r"professional experience|positions|office hours|cv)\s*:?$", re.I,
+)
+
+
+def _section(lines: list[str], start: int) -> list[str]:
+    """Lines under the heading at `start`, up to the next heading (marked or a known section label)."""
+    out = []
+    for line in lines[start + 1:]:
+        text = re.sub(r"^-\s+", "", line.strip())
+        if line.startswith("## ") or OTHER_SECTION.match(text):
+            break
+        if text:
+            out.append(text)
+    return out
+
+
+def _score(sentence: str) -> int:
+    score = 4 if INTEREST_PHRASE.search(sentence) else 0
+    score += min(5, len(find_terms(sentence, METHOD_TERMS + DOMAIN_TERMS)))
+    if NOT_INTERESTS.search(sentence):
+        score -= 5
+    return score
+
+
+def _pick_interests(pages: list[PageText]) -> tuple[str | None, str | None]:
+    """1) a 'Research interests' section; 2) best research sentences, preferring About/Research sections."""
+    for page in pages:
+        lines = page.text.splitlines()
+        for i, line in enumerate(lines):
+            label = re.sub(r"^(##|-)\s+", "", line.strip())
+            is_heading = line.startswith("## ") or (len(label) < 40 and not re.search(r"[.!?]$", label))
+            if is_heading and INTEREST_HEADING.match(label):
+                items = []
+                for item in dict.fromkeys(_section(lines, i)):
+                    # Prose after a list of short labels (e.g. the bio that follows) ends the section.
+                    is_sentence = item.endswith(".") and len(item.split()) > 10
+                    if len(item) > 150 or (items and is_sentence):
+                        break
+                    if item.lower() != label.lower():
+                        items.append(item)
+                items = items[:12]
+                if items:
+                    joined = "; ".join(x.rstrip(".;,") for x in items)
+                    return f"Research interests: {joined[:500]}.", page.url
+
+    best: list[tuple[int, int, str, str]] = []  # (score, order, sentence, url)
+    order = 0
+    for rank, page in enumerate(pages):
+        lines = page.text.splitlines()
+        prose_ranges = [
+            (i, i + len(_section(lines, i)) + 1) for i, ln in enumerate(lines)
+            if ln.startswith("## ") and PROSE_HEADING.match(ln[3:].strip())
+        ]
+        for block_line, sentence in _sentences_with_lines(page.text):
+            order += 1
+            if not 40 <= len(sentence) <= 400:
+                continue
+            score = _score(sentence)
+            if any(a <= block_line <= b for a, b in prose_ranges):
+                score += 2
+            if rank == 0:
+                score += 1
+            if score >= 3:
+                best.append((score, order, sentence, page.url))
+    if not best:
+        return None, None
+    ranked = sorted(best, key=lambda b: (-b[0], b[1]))
+    # A second sentence only if it also reads like a research description (not a paper title or abstract).
+    top = ranked[:1] + [b for b in ranked[1:2] if OWN_RESEARCH.search(b[2]) and not NOT_INTERESTS.search(b[2])]
+    top.sort(key=lambda b: b[1])  # keep reading order
+    return " ".join(b[2] for b in top), top[0][3]
+
+
+def _sentences_with_lines(text: str) -> list[tuple[int, str]]:
+    """Sentences with the index of the line they come from, for section membership."""
+    out = []
+    for i, line in enumerate(text.splitlines()):
+        for s in sentences(line):
+            out.append((i, s))
+    return out
 
 
 def _abstract(text: str) -> str:
