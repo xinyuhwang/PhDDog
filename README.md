@@ -8,8 +8,8 @@ schools and your resume. It finds professors whose research matches yours,
 analyzes the papers you choose, drafts outreach emails based on concrete
 connections, and keeps a record of everyone you've contacted.
 
-> **Status:** early design stage. See [docs/DESIGN.md](docs/DESIGN.md) for the full design.
-> The setup steps below describe the planned workflow and don't work yet.
+> **Status:** MVP scaffold. All four stages work end to end in offline mode; the Claude
+> integration is next. See [docs/DESIGN.md](docs/DESIGN.md) for the full design.
 
 ---
 
@@ -78,17 +78,43 @@ PhDDog/
 └── docker-compose.yml
 ```
 
-## Getting started (planned)
+## Getting started
+
+Requires Docker. No API key is needed: by default the app runs in **offline
+mode** (`LLM_PROVIDER=fake`), where rule-based stand-ins replace Claude.
+Fetching sites, reading PDFs, paper lookups, the database and the UI are all
+real; generated text (summaries, connections, emails) is marked `[FAKE]`.
 
 ```bash
 git clone https://github.com/xinyuhwang/PhDDog.git
 cd PhDDog
-cp .env.example .env        # set ANTHROPIC_API_KEY
-docker compose up --build
+cp .env.example .env
+docker compose up -d --build
 ```
 
-- Frontend: <http://localhost:3000>
+- App: <http://localhost:3000> (set `FRONTEND_PORT` in `.env` if 3000 is taken)
 - API docs: <http://localhost:8000/docs>
+
+In offline mode, homepages can't be searched for, so include the URL in the
+entry (`Name, School https://...`) or paste it when the app asks. A few
+professors are pre-filled in `backend/app/llm/fake_homepages.json` for testing.
+
+### Backend tests
+
+```bash
+docker compose up -d db
+cd backend && uv run pytest
+```
+
+### Running without Docker for the app
+
+Keep Postgres in Docker (`docker compose up -d db`), then in separate terminals:
+
+```bash
+cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app --reload
+cd backend && uv run python -m app.worker
+cd frontend && npm install && npm run dev
+```
 
 ## Roadmap
 

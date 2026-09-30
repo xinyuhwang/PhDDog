@@ -1,0 +1,15 @@
+{
+  "_comment": "Offline stand-in for web search: 'normalized name|school domain' -> homepage URL. Add entries to test without Claude.",
+  "jacob gardner|upenn.edu": "https://jacobrgardner.github.io/",
+  "mark yatskar|upenn.edu": "https://www.cis.upenn.edu/~myatskar/",
+  "eric eaton|upenn.edu": "https://www.engineering.upenn.edu/~eeaton/",
+  "eric wong|upenn.edu": "https://www.cis.upenn.edu/~exwong/",
+  "pranam chatterjee|upenn.edu": "https://www.chatterjeelab.com/",
+  "sharath guntuku|upenn.edu": "https://sharathg.cis.upenn.edu/",
+  "sharath chandra guntuku|upenn.edu": "https://sharathg.cis.upenn.edu/",
+  "lyle ungar|upenn.edu": "https://www.cis.upenn.edu/~ungar/",
+  "osbert bastani|upenn.edu": "https://obastani.github.io/",
+  "mingmin zhao|upenn.edu": "https://www.cis.upenn.edu/~mingminz/",
+  "insup lee|upenn.edu": "https://insuplee.seas.upenn.edu/",
+  "eva dyer|upenn.edu": "https://nerdslab.github.io/"
+}
