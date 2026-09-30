@@ -20,9 +20,9 @@ export function Badge({ tone = "gray", children, title }: { tone?: Tone; childre
 const FIT: Record<string, [Tone, string]> = { strong: ["green", "Strong fit"], possible: ["yellow", "Possible"], no: ["gray", "No fit"] };
 const RECRUITING: Record<string, [Tone, string]> = {
   explicitly_recruiting: ["green", "Recruiting"],
-  recruits_generally: ["blue", "Recruits yearly"],
+  recruits_generally: ["blue", "Open to students"],
   not_recruiting: ["red", "Not recruiting"],
-  unknown: ["gray", "Unknown"],
+  unknown: ["gray", "No evidence"],
 };
 const CONTACT: Record<string, [Tone, string]> = {
   welcomes_email: ["green", "Email OK"],

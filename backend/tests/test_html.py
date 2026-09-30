@@ -71,3 +71,14 @@ def test_directory_profile_does_not_crawl_department_pages():
     base = "https://x.edu/faculty/jane-doe/"
     assert subpage_links(html, base, 8) == ["https://x.edu/faculty/jane-doe/publications/"]
     assert own_site_links(html, base) == ["https://janedoe.org"]
+
+
+def test_recruiting_links_prioritized_and_followed_from_subpages():
+    from app.ingest.html import recruiting_links
+
+    home = """<a href="publications.html">Publications</a><a href="people.html">People</a>
+    <a href="projects/compositional/">Compositional Learning</a><a href="join.html">Join us</a>"""
+    base = "https://x.edu/~jd/"
+    assert subpage_links(home, base, 2) == ["https://x.edu/~jd/join.html", "https://x.edu/~jd/publications.html"]
+    people = '<a href="openpositions.html">Open Positions</a><a href="https://x.edu/admissions/apply">Apply</a>'
+    assert recruiting_links(people, "https://x.edu/~jd/people.html", base) == ["https://x.edu/~jd/openpositions.html"]

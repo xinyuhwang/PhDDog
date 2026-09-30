@@ -11,6 +11,10 @@ def get_llm() -> LLM:
         from app.llm.claude import ClaudeLLM
 
         return ClaudeLLM(settings)
+    if settings.llm_provider == "ollama":
+        from app.llm.ollama import OllamaLLM
+
+        return OllamaLLM(settings)
     from app.llm.fake import FakeLLM
 
     return FakeLLM()

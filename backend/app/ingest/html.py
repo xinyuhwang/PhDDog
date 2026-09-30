@@ -5,7 +5,7 @@ import trafilatura
 from selectolax.parser import HTMLParser
 
 SUBPAGE_PATTERN = re.compile(
-    r"research|publication|papers|people|members|team|join|prospective|opening|position|students|cv|bio|about|contact|lab",
+    r"research|publication|papers|people|members|team|join|prospective|opening|position|opportunit|recruit|students|cv|bio|about|contact|lab",
     re.IGNORECASE,
 )
 
@@ -104,6 +104,13 @@ OWN_SITE_TEXT = re.compile(
 )
 
 
+# Pages most likely to say whether they take students; crawled first and followed one level deeper.
+RECRUITING_LINK = re.compile(
+    r"open[\s_-]?positions?|\b(openings?|opportunit\w*|join|prospective|recruit\w*|vacanc\w*|hiring|apply|positions?|contact)\b",
+    re.IGNORECASE,
+)
+
+
 def scope_prefix(url: str) -> str:
     """Path prefix a crawl may stay within.
 
@@ -145,16 +152,26 @@ def subpage_links(html: str, base_url: str, limit: int) -> list[str]:
     prefix = scope_prefix(base_url)
     seen: set[str] = set()
     out: list[str] = []
+    recruiting: list[str] = []
     for text, url, parts in _links(html, base_url):
         if parts.netloc != base.netloc or not parts.path.startswith(prefix.rstrip("/") or "/"):
             continue
-        if url.rstrip("/") == base_url.rstrip("/") or url in seen or not SUBPAGE_PATTERN.search(f"{text} {parts.path}"):
+        label = f"{text} {parts.path}"
+        if url.rstrip("/") == base_url.rstrip("/") or url in seen or not SUBPAGE_PATTERN.search(label):
             continue
         seen.add(url)
-        out.append(url)
-        if len(out) >= limit:
-            break
-    return out
+        (recruiting if RECRUITING_LINK.search(label) else out).append(url)
+    return (recruiting + out)[:limit]
+
+
+def recruiting_links(html: str, base_url: str, scope_url: str) -> list[str]:
+    """Open-positions / join-us style links on a subpage, within the professor's scope (one extra hop)."""
+    base, prefix = urlsplit(scope_url), scope_prefix(scope_url)
+    return [
+        url for text, url, parts in _links(html, base_url)
+        if parts.netloc == base.netloc and parts.path.startswith(prefix.rstrip("/") or "/")
+        and RECRUITING_LINK.search(f"{text} {parts.path}")
+    ]
 
 
 def own_site_links(html: str, base_url: str, limit: int = 2) -> list[str]:
@@ -168,4 +185,24 @@ def own_site_links(html: str, base_url: str, limit: int = 2) -> list[str]:
             out.append(url)
             if len(out) >= limit:
                 break
+    return out
+
+
+LAB_TEXT = re.compile(r"\b(lab|laboratory|group|research group)\b", re.IGNORECASE)
+
+
+def lab_links(html: str, base_url: str, limit: int = 2) -> list[str]:
+    """Links from a personal site to the professor's lab site ("ARCADE Lab", arcade.cs.jhu.edu), front pages only."""
+    base = urlsplit(base_url)
+    out: list[str] = []
+    for text, url, parts in _links(html, base_url):
+        host_label = parts.netloc.lower().split(":")[0].removeprefix("www.").split(".")[0]
+        other_site = parts.netloc != base.netloc
+        looks_lab = LAB_TEXT.search(text) or re.search(r"(lab|labs|group)$", host_label)
+        if other_site and looks_lab and not re.search(r"google|github\.com|linkedin|twitter|x\.com|scholar", parts.netloc):
+            root = f"{parts.scheme}://{parts.netloc}/"
+            if root not in out:
+                out.append(root)
+                if len(out) >= limit:
+                    break
     return out

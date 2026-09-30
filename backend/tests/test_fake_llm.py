@@ -55,9 +55,8 @@ def test_extract_recruiting_and_contact_policy():
     ))
     x = llm.extract_profile([home], "Mark Yatskar", "upenn.edu")
     assert x.title == "Assistant Professor"
-    assert x.recruiting_status == "recruits_generally"
-    assert x.contact_policy == "do_not_email"
-    assert x.contact_evidence.quote.startswith("Because of the volume")
+    assert [(c.kind, c.claim) for c in x.claims] == [("recruiting", "recruits_generally"), ("contact_policy", "do_not_email")]
+    assert x.claims[1].quote.startswith("Because of the volume")
     assert x.email == "myatskar@cis.upenn.edu"
 
 
@@ -67,9 +66,9 @@ def test_extract_cycle_takes_latest_year():
         "If you are interested, apply to the CIS PhD Program directly, but do mention me in your application!"
     ))
     x = llm.extract_profile([page], "Jacob Gardner", "upenn.edu")
-    assert x.recruiting_status == "explicitly_recruiting"
-    assert x.recruiting_cycle == "Fall 2026"
-    assert x.contact_policy == "apply_via_program"
+    claims = {(c.kind, c.claim, c.cycle) for c in x.claims}
+    assert ("recruiting", "explicitly_recruiting", "Fall 2026") in claims
+    assert ("contact_policy", "apply_via_program", None) in claims
 
 
 def test_screen_labels():
@@ -89,3 +88,36 @@ def test_screen_synonyms_and_related_fields():
     profile = StructuredProfile(methods=["machine learning"], domains=["healthcare", "ehr"])
     ehr = llm.screen_professor(profile, [], None, "AI for public health using electronic health records.")
     assert ehr.label in ("possible", "strong") and "ehr" in ehr.reason
+
+
+def test_postdoc_statements_are_not_phd_recruiting():
+    page = PageText(url="https://x.edu/~jd/openpositions.html", text=(
+        "We currently have no openings for postdocs. "
+        "If you are interested in a postdoc fellowship, please contact me. "
+        "I do have one or more openings for PhD students in my research group in the next admission cycle."
+    ))
+    claims = llm.extract_profile([page], "Jane Doe", "x.edu").claims
+    assert [(c.kind, c.claim) for c in claims] == [("recruiting", "explicitly_recruiting")]
+
+
+@pytest.mark.parametrize("sentence", [
+    "Select me as a potential advisor in your application.",
+    "If you are interested in our research group, please list Eric Eaton as a prospective advisor in your PhD application and statement of purpose.",
+    "If you are interested, please apply here and mention me as a potential advisor.",
+    "If you’re interested in working with me, please apply to the Hopkins program and call me out as a potential advisor explaining why.",
+])
+def test_name_me_as_advisor_means_open_to_students(sentence):
+    page = PageText(url="https://x.edu/~ee/", text=sentence)
+    claims = {(c.kind, c.claim) for c in llm.extract_profile([page], "Eric Eaton", "x.edu").claims}
+    assert claims == {("recruiting", "recruits_generally"), ("contact_policy", "apply_via_program")}
+
+
+def test_lab_contact_page_roles():
+    page = PageText(url="https://lab.x.edu/contact", text=(
+        "We are actively recruiting PhD students through the official Graduate Admissions Portal. "
+        "If you’re a prospective undergraduate or master’s student interested in our lab, you’re welcome to reach out "
+        "directly to Jane, or to any of our PhD students or postdocs. "
+        "For academic or clinical collaborations, please contact Jane directly via email."
+    ))
+    claims = [(c.kind, c.claim) for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims]
+    assert claims == [("recruiting", "explicitly_recruiting")]

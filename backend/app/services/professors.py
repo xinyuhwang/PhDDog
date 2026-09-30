@@ -10,20 +10,22 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import HomepageCandidate, Professor, School, SourcePage, User
 from app.ingest.fetch import FetchResult, fetch
-from app.ingest.html import html_to_text, own_site_links, subpage_links
+from app.ingest.html import html_to_text, lab_links, own_site_links, recruiting_links, subpage_links
 from app.llm import get_llm
 from app.llm.schemas import ExtractedProfile, PageText, ParsedEntry
+from app.services import evidence as evidence_svc
 from app.services.jobs import enqueue, handler
 from app.services.schools import get_or_create_school, known_aliases
 from app.storage.local import save_bytes, sha256
 
 AUTO_ACCEPT_CONFIDENCE = 0.8
+MAX_EXTRA_RECRUITING_PAGES = 3
+LINKED_SITE_SUBPAGES = 5  # per linked personal/lab site
+MAX_LAB_SITES = 2
 # Fields a refresh may overwrite unless the user edited them.
-EXTRACTED_FIELDS = [
-    "title", "department", "email", "lab_url", "stated_interests", "bio_summary", "recent_publications",
-    "recruiting_status", "recruiting_cycle", "recruiting_evidence", "recruiting_source_url",
-    "contact_policy", "contact_evidence", "contact_source_url",
-]
+EXTRACTED_FIELDS = ["title", "department", "email", "lab_url", "stated_interests", "bio_summary", "recent_publications"]
+# Summarized from evidence (app/services/evidence.py); the user can still override them.
+EVIDENCE_FIELDS = ["recruiting_status", "contact_policy"]
 
 
 def normalize_name(name: str) -> str:
@@ -81,6 +83,78 @@ def set_homepage(db: Session, prof: Professor, url: str) -> None:
     prof.homepage_url, prof.resolve_status, prof.resolve_error = url, "pending", None
     enqueue(db, "resolve_professor", professor_id=prof.id)
     db.commit()
+
+
+def submit_evidence(
+    db: Session, prof: Professor, url: str, quote: str | None, claim: str | None, cycle: str | None,
+) -> list:
+    """The user points at a page (and optionally the exact sentence) that says something about recruiting.
+
+    With a sentence: it must appear on the page. Without one: the page is read for statements.
+    Raises ValueError with a message for the user when nothing usable is found.
+    """
+    page = next((p for p in prof.source_pages if p.url == url), None) or SourcePage(professor_id=prof.id, url=url)
+    db.add(page)
+    try:
+        r = fetch(url)
+    except Exception as e:  # noqa: BLE001 - blocked (403 / bot protection), down, or not found
+        return _submit_unreadable(db, prof, page, url, quote, claim, cycle, str(e))
+    page.kind = "user_submitted" if page.kind in (None, "user_submitted") else page.kind
+    page.final_url = r.final_url
+    page.raw_html_path = save_bytes(r.content, "pages", str(prof.id), f"{sha256(r.content)}.html")
+    page.text = html_to_text(r.text)
+    page.page_updated_at = evidence_svc.page_updated_at(r.last_modified, page.text)
+    page.fetch_status, page.error, page.fetched_at = "ok", None, datetime.now(UTC)
+    db.flush()
+    texts = [PageText(url=page.final_url, text=page.text or "", kind="user_submitted")]
+
+    if quote:
+        if not claim:
+            raise ValueError("Choose what the sentence says (e.g. Recruiting, Don't email).")
+        from app.llm.schemas import Claim
+
+        kind = "recruiting" if claim in ("explicitly_recruiting", "recruits_generally", "not_recruiting") else "contact_policy"
+        claims = verified_claims(ExtractedProfile(claims=[
+            Claim(kind=kind, claim=claim, cycle=cycle or None, quote=quote.strip(), source_url=page.final_url)
+        ]), texts)
+        if not claims:
+            raise ValueError("That sentence isn't on the page (it must match the page text exactly; copy and paste it).")
+        pairs = [(c, evidence_svc.USER) for c in claims]
+    else:
+        llm = get_llm()
+        found = verified_claims(llm.extract_profile(texts, prof.name, prof.school.primary_domain), texts)
+        if not found:
+            raise ValueError("Couldn't find a recruiting or contact statement on that page. Paste the sentence and choose what it says.")
+        pairs = [(c, evidence_svc.USER) for c in found]
+
+    evidence_svc.upsert(db, prof, pairs, [page])
+    evidence_svc.apply_summary(prof)
+    db.commit()
+    return [c for c, _ in pairs]
+
+
+def _submit_unreadable(
+    db: Session, prof: Professor, page: SourcePage, url: str, quote: str | None, claim: str | None, cycle: str | None,
+    error: str,
+) -> list:
+    """The page can't be read automatically. Keep the user's sentence, marked unverified."""
+    if not (quote and quote.strip() and claim):
+        raise ValueError(
+            f"The app can't open that page ({error.splitlines()[0][:120]}). It may block automated visits. "
+            "Paste the exact sentence and choose what it says to save it as unverified evidence."
+        )
+    from app.llm.schemas import Claim
+
+    page.kind = "user_submitted" if page.kind in (None, "user_submitted") else page.kind
+    page.fetch_status, page.error, page.fetched_at = "failed", error, datetime.now(UTC)
+    kind = "recruiting" if claim in ("explicitly_recruiting", "recruits_generally", "not_recruiting") else "contact_policy"
+    c = Claim(kind=kind, claim=claim, cycle=cycle or None, quote=quote.strip(), source_url=url)
+    evidence_svc.upsert(db, prof, [(c, evidence_svc.USER)], [page])
+    row = next(e for e in prof.evidence if e.source_url == url and e.quote == c.quote and e.kind == kind)
+    row.verified = False
+    evidence_svc.apply_summary(prof)
+    db.commit()
+    return [c]
 
 
 def request_refresh(db: Session, prof: Professor) -> None:
@@ -156,8 +230,10 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
     settings = get_settings()
     fresh_after = datetime.now(UTC) - timedelta(days=settings.fetch_cache_days)
     existing = {p.url: p for p in prof.source_pages}
+    attempted: set[str] = set()
 
     def load(url: str, kind: str, prefetched: FetchResult | None = None) -> tuple[SourcePage, str | None]:
+        attempted.add(url)
         page = existing.get(url)
         if page and not force and page.fetch_status == "ok" and page.fetched_at and page.fetched_at > fresh_after and not prefetched:
             html = open(page.raw_html_path).read() if page.raw_html_path else None
@@ -170,6 +246,7 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
             page.final_url = r.final_url
             page.raw_html_path = save_bytes(r.content, "pages", str(prof.id), f"{sha256(r.content)}.html")
             page.text = html_to_text(html)
+            page.page_updated_at = evidence_svc.page_updated_at(r.last_modified, page.text)
             page.fetch_status, page.error = "ok", None
         except Exception as e:  # noqa: BLE001
             html = None
@@ -182,28 +259,76 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
         prof.resolve_status, prof.resolve_error = "not_found", f"Homepage fetch failed: {home.error}"
         return
     pages = [home]
-    base = home.final_url or home.url
-    for url in subpage_links(home_html or "", base, settings.max_subpages):
-        page, _ = load(url, "subpage")
-        if page.fetch_status == "ok":
-            pages.append(page)
-    # A directory profile often links to the professor's own site ("Website", "Lab"); read its front page too.
-    linked = own_site_links(home_html or "", base)
+    crawled = {home.url, home.final_url}
+
+    def explore(root: SourcePage, root_html: str, max_subpages: int, kind: str = "subpage") -> None:
+        """Subpages of one site (within its scope), then one more hop for "Open positions" links."""
+        root_url = root.final_url or root.url
+        sub_html: list[tuple[SourcePage, str]] = []
+        for url in subpage_links(root_html, root_url, max_subpages):
+            if url in crawled:
+                continue
+            page, html = load(url, kind)
+            crawled.update({url, page.final_url})
+            if page.fetch_status == "ok":
+                pages.append(page)
+                sub_html.append((page, html or ""))
+        extra: list[str] = []
+        for page, html in [(root, root_html), *sub_html]:
+            for url in recruiting_links(html, page.final_url or page.url, root_url):
+                if url not in crawled and url not in extra:
+                    extra.append(url)
+        for url in extra[:MAX_EXTRA_RECRUITING_PAGES]:
+            page, _ = load(url, kind)
+            crawled.update({url, page.final_url})
+            if page.fetch_status == "ok":
+                pages.append(page)
+
+    explore(home, home_html or "", settings.max_subpages)
+    # A directory profile often links to the professor's own site ("Research Website", "Lab").
+    # Explore that site like a homepage: that's where Join / Open positions pages usually live.
+    linked = [u for u in own_site_links(home_html or "", home.final_url or home.url) if u not in crawled]
+    labs: list[str] = []
     for url in linked:
-        page, _ = load(url, "linked_site")
+        page, html = load(url, "linked_site")
+        crawled.update({url, page.final_url})
         if page.fetch_status == "ok":
             pages.append(page)
-    # Drop pages from earlier crawls that this crawl no longer reaches.
-    for stale in set(existing.values()) - set(pages):
-        db.delete(stale)
+            explore(page, html or "", LINKED_SITE_SUBPAGES)
+            labs += [u for u in lab_links(html or "", page.final_url or url) if u not in labs]
+    # One more site: the lab linked from their personal site (join / contact notes often live there).
+    for url in [u for u in labs if u not in crawled][:MAX_LAB_SITES]:
+        page, html = load(url, "lab_site")
+        crawled.update({url, page.final_url})
+        if page.fetch_status == "ok":
+            pages.append(page)
+            explore(page, html or "", LINKED_SITE_SUBPAGES, kind="lab_site")
+    # Pages the user submitted as evidence are always re-read.
+    for submitted in [p for p in existing.values() if p.kind == "user_submitted"]:
+        page, _ = load(submitted.url, "user_submitted")
+        if page.fetch_status == "ok":
+            pages.append(page)
+    failed_urls = {p.url for p in existing.values() if p.fetch_status == "failed"}
+    failed_urls |= {p.url for p in db.new if isinstance(p, SourcePage) and p.fetch_status == "failed"}
+    # Drop pages from earlier crawls that this crawl no longer links to. Pages that failed to load
+    # this time stay (and are listed as unreadable); pages the user submitted always stay.
+    for url, stale in existing.items():
+        if url not in attempted and stale.kind != "user_submitted":
+            db.delete(stale)
     db.flush()
 
     page_texts = [PageText(url=p.final_url or p.url, text=p.text or "", kind=p.kind) for p in pages]
-    extracted = get_llm().extract_profile(page_texts, prof.name, prof.school.primary_domain)
-    _drop_unverified_quotes(extracted, page_texts)
+    llm = get_llm()
+    extracted = llm.extract_profile(page_texts, prof.name, prof.school.primary_domain)
+    extracted.claims = verified_claims(extracted, page_texts)
     if linked and not extracted.lab_url:
         extracted.lab_url = linked[0]
     _apply_extracted(prof, extracted)
+    user = verified_claims(ExtractedProfile(claims=evidence_svc.user_claims(prof)), page_texts)
+    evidence_svc.record(
+        db, prof, [(c, llm.name) for c in extracted.claims] + [(c, evidence_svc.USER) for c in user], pages, failed_urls,
+    )
+    evidence_svc.apply_summary(prof)
 
     prof.resolve_status, prof.resolve_error = "resolved", None
     prof.last_checked_at = datetime.now(UTC)
@@ -222,22 +347,19 @@ def _squash(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def _drop_unverified_quotes(extracted: ExtractedProfile, pages: list[PageText]) -> None:
-    """A recruiting/contact claim must quote text that is really on the page it cites."""
+MIN_QUOTE_CHARS = 15
+
+
+def verified_claims(extracted: ExtractedProfile, pages: list[PageText]) -> list:
+    """Keep only claims whose quote really appears on the page it cites.
+
+    Quotes must be a real sentence fragment: an empty or tiny quote "appears" on every page.
+    """
     texts = {p.url: _squash(p.text) for p in pages}
-    for field in ("recruiting_evidence", "contact_evidence"):
-        ev = getattr(extracted, field)
-        if ev and _squash(ev.quote) not in texts.get(ev.source_url, ""):
-            setattr(extracted, field, None)
-            if field == "recruiting_evidence":
-                extracted.recruiting_status, extracted.recruiting_cycle = "unknown", None
-            else:
-                extracted.contact_policy = "unknown"
-
-
-def cycle_year(cycle: str | None) -> int | None:
-    m = re.search(r"(20\d{2})", cycle or "")
-    return int(m.group(1)) if m else None
+    return [
+        c for c in extracted.claims
+        if len(_squash(c.quote)) >= MIN_QUOTE_CHARS and _squash(c.quote) in texts.get(c.source_url, "")
+    ]
 
 
 def _apply_extracted(prof: Professor, x: ExtractedProfile) -> None:
@@ -249,18 +371,8 @@ def _apply_extracted(prof: Professor, x: ExtractedProfile) -> None:
         "stated_interests": x.stated_interests,
         "bio_summary": x.bio_summary,
         "recent_publications": [p.model_dump() for p in x.recent_publications],
-        "recruiting_status": x.recruiting_status,
-        "recruiting_cycle": x.recruiting_cycle,
-        "recruiting_evidence": x.recruiting_evidence.quote if x.recruiting_evidence else None,
-        "recruiting_source_url": x.recruiting_evidence.source_url if x.recruiting_evidence else None,
-        "contact_policy": x.contact_policy,
-        "contact_evidence": x.contact_evidence.quote if x.contact_evidence else None,
-        "contact_source_url": x.contact_evidence.source_url if x.contact_evidence else None,
     }
     for field in EXTRACTED_FIELDS:
         if field not in prof.user_overrides:
             setattr(prof, field, values[field])
     prof.field_sources = x.field_sources
-    target = cycle_year(get_settings().target_cycle)
-    year = cycle_year(prof.recruiting_cycle)
-    prof.recruiting_stale = bool(target and year and year < target)

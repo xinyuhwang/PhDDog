@@ -79,9 +79,28 @@ class ProfessorSummary(ORM):
     recruiting_status: str
     recruiting_cycle: str | None
     recruiting_stale: bool
+    recruiting_confidence: str | None
     contact_policy: str
+    last_checked_at: datetime | None
+    check_stale: bool = False  # last site check is older than RECHECK_AFTER_DAYS
     status: str
     screen: ScreenOut | None = None
+
+
+class EvidenceOut(ORM):
+    id: uuid.UUID
+    kind: str
+    claim: str
+    cycle: str | None
+    quote: str
+    source_url: str
+    source_type: str
+    page_updated_at: datetime | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    gone_at: datetime | None
+    extractor: str
+    verified: bool
 
 
 class ProfessorDetail(ProfessorSummary):
@@ -98,8 +117,8 @@ class ProfessorDetail(ProfessorSummary):
     contact_source_url: str | None
     field_sources: dict
     user_overrides: list[str]
-    last_checked_at: datetime | None
     notes: str | None
+    evidence: list[EvidenceOut]
     candidates: list[CandidateOut]
     pages: list[dict]
 
@@ -120,6 +139,16 @@ class ProfessorPatch(BaseModel):
 
 class HomepageIn(BaseModel):
     url: str
+
+
+class EvidenceIn(BaseModel):
+    url: str
+    quote: str | None = None
+    claim: Literal[
+        "explicitly_recruiting", "recruits_generally", "not_recruiting",
+        "welcomes_email", "apply_via_program", "do_not_email",
+    ] | None = None
+    cycle: str | None = None
 
 
 class PaperUrlIn(BaseModel):

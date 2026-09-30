@@ -137,3 +137,170 @@ def test_needs_review_when_no_homepage_found(client):
     client.post(f"/professors/{prof['id']}/homepage", json={"url": "https://jg.example.edu/"})
     run_jobs()
     assert client.get(f"/professors/{prof['id']}").json()["resolve_status"] == "resolved"
+
+
+def test_evidence_history_when_page_changes(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    pages = {"https://hist.example.edu/~kim/": "<p>Kim Lee is a professor. I am recruiting PhD students for Fall 2027.</p>"}
+
+    def fetch(url, check_robots=True):
+        return FetchResult(url=url, final_url=url, status_code=200, content_type="text/html", content=pages[url].encode(),
+                           last_modified="Wed, 01 Jul 2026 10:00:00 GMT")
+
+    monkeypatch.setattr(prof_svc, "fetch", fetch)
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [
+        {"raw": "k", "name": "Kim Lee", "school_raw": "Example State", "url": "https://hist.example.edu/~kim/"}]}).json()
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert (detail["recruiting_status"], detail["recruiting_confidence"]) == ("explicitly_recruiting", "high")
+    [ev] = detail["evidence"]
+    assert ev["source_type"] == "personal" and ev["gone_at"] is None and ev["page_updated_at"].startswith("2026-07-01")
+
+    pages["https://hist.example.edu/~kim/"] = "<p>Kim Lee is a professor working on clinical NLP.</p>"
+    client.post(f"/professors/{prof['id']}/refresh")
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert detail["recruiting_status"] == "unknown" and detail["recruiting_confidence"] is None
+    [ev] = detail["evidence"]
+    assert ev["gone_at"] is not None  # kept as history, no longer counted
+
+
+def test_user_submitted_evidence(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    pages = {
+        "https://sub.example.edu/~ana/": "<p>Ana Ruiz is a professor of clinical NLP.</p>",
+        "https://sub.example.edu/~ana/openpositions.html": (
+            "<p>I will be recruiting 1-2 PhD students for Fall 2027. Please do not email me about admissions.</p>"),
+    }
+
+    def fetch(url, check_robots=True):
+        if url not in pages:
+            raise RuntimeError("404")
+        return FetchResult(url=url, final_url=url, status_code=200, content_type="text/html", content=pages[url].encode())
+
+    monkeypatch.setattr(prof_svc, "fetch", fetch)
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [
+        {"raw": "a", "name": "Ana Ruiz", "school_raw": "Sub State", "url": "https://sub.example.edu/~ana/"}]}).json()
+    run_jobs()
+    pid = prof["id"]
+    assert client.get(f"/professors/{pid}").json()["recruiting_status"] == "unknown"
+
+    url = "https://sub.example.edu/~ana/openpositions.html"
+    bad = client.post(f"/professors/{pid}/evidence", json={"url": url, "quote": "I am recruiting 5 students.", "claim": "explicitly_recruiting"})
+    assert bad.status_code == 400 and "isn't on the page" in bad.json()["detail"]
+
+    ok = client.post(f"/professors/{pid}/evidence", json={"url": url})  # no quote: read the page
+    assert ok.status_code == 200, ok.text
+    detail = client.get(f"/professors/{pid}").json()
+    assert (detail["recruiting_status"], detail["recruiting_cycle"], detail["recruiting_confidence"]) == (
+        "explicitly_recruiting", "Fall 2027", "high")
+    assert detail["contact_policy"] == "do_not_email"
+    assert {e["extractor"] for e in detail["evidence"]} == {"user"}
+
+    # A re-check keeps the submitted page and its evidence.
+    client.post(f"/professors/{pid}/refresh")
+    run_jobs()
+    detail = client.get(f"/professors/{pid}").json()
+    assert detail["recruiting_status"] == "explicitly_recruiting"
+    assert all(e["gone_at"] is None for e in detail["evidence"])
+
+    # If the sentence is removed from the page, it moves to history on the next re-check.
+    pages[url] = "<p>Positions are filled.</p>"
+    client.post(f"/professors/{pid}/refresh")
+    run_jobs()
+    detail = client.get(f"/professors/{pid}").json()
+    assert detail["recruiting_status"] == "unknown" and all(e["gone_at"] for e in detail["evidence"])
+
+    for e in detail["evidence"]:
+        assert client.delete(f"/professors/evidence/{e['id']}").status_code == 204
+    assert client.get(f"/professors/{pid}").json()["evidence"] == []
+
+
+def test_directory_profile_explores_linked_personal_site(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    pages = {
+        "https://directory.dir.example.edu/lee/": '<p>Lee Park, Professor.</p><a href="https://people.dir.example.edu/~lee/">Research Website</a>',
+        "https://people.dir.example.edu/~lee/": '<p>I study clinical NLP.</p><a href="join.html">Join</a>',
+        "https://people.dir.example.edu/~lee/join.html": "<p>I am recruiting PhD students for Fall 2027.</p>",
+    }
+    monkeypatch.setattr(prof_svc, "fetch", lambda url, check_robots=True: FetchResult(
+        url=url, final_url=url, status_code=200, content_type="text/html", content=pages[url].encode()))
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [
+        {"raw": "l", "name": "Lee Park", "school_raw": "Dir State", "url": "https://directory.dir.example.edu/lee/"}]}).json()
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert {p["url"] for p in detail["pages"]} == set(pages)
+    assert (detail["recruiting_status"], detail["recruiting_cycle"]) == ("explicitly_recruiting", "Fall 2027")
+    assert detail["recruiting_source_url"] == "https://people.dir.example.edu/~lee/join.html"
+
+
+def test_unverified_evidence_from_blocked_site(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    home = "https://blk.example.edu/faculty/sam/"
+
+    def fetch(url, check_robots=True):
+        if url == home:
+            return FetchResult(url=url, final_url=url, status_code=200, content_type="text/html",
+                               content=b"<p>Sam Cho is a professor of health AI.</p>")
+        raise RuntimeError("Client error '403 Forbidden'")
+
+    monkeypatch.setattr(prof_svc, "fetch", fetch)
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [{"raw": "s", "name": "Sam Cho", "school_raw": "Blk State", "url": home}]}).json()
+    run_jobs()
+    pid, blocked = prof["id"], "https://samcho.blk.example.edu/"
+
+    no_quote = client.post(f"/professors/{pid}/evidence", json={"url": blocked})
+    assert no_quote.status_code == 400 and "block" in no_quote.json()["detail"]
+
+    ok = client.post(f"/professors/{pid}/evidence", json={
+        "url": blocked, "quote": "I am recruiting PhD students for Fall 2027.", "claim": "explicitly_recruiting", "cycle": "Fall 2027"})
+    assert ok.status_code == 200, ok.text
+    detail = client.get(f"/professors/{pid}").json()
+    [ev] = detail["evidence"]
+    assert ev["verified"] is False and ev["extractor"] == "user"
+    assert (detail["recruiting_status"], detail["recruiting_confidence"]) == ("explicitly_recruiting", "medium")
+
+    client.post(f"/professors/{pid}/refresh")  # still blocked: evidence stays, still unverified
+    run_jobs()
+    [ev] = client.get(f"/professors/{pid}").json()["evidence"]
+    assert ev["gone_at"] is None and ev["verified"] is False
+
+
+def test_evidence_kept_when_linking_page_fails(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    base = "https://flaky.example.edu/~ed/"
+    pages = {base: '<a href="people.html">People</a>', base + "people.html": '<a href="openpositions.html">Open Positions</a>',
+             base + "openpositions.html": "<p>I do have openings for PhD students in the next admission cycle.</p>"}
+    down: set[str] = set()
+
+    def fetch(url, check_robots=True):
+        if url in down:
+            raise RuntimeError("timed out")
+        return FetchResult(url=url, final_url=url, status_code=200, content_type="text/html", content=pages[url].encode())
+
+    monkeypatch.setattr(prof_svc, "fetch", fetch)
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [{"raw": "e", "name": "Ed Flake", "school_raw": "Flaky U", "url": base}]}).json()
+    run_jobs()
+    assert client.get(f"/professors/{prof['id']}").json()["recruiting_status"] == "explicitly_recruiting"
+
+    down.add(base + "people.html")  # the page linking to Open Positions times out
+    client.post(f"/professors/{prof['id']}/refresh")
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert detail["recruiting_status"] == "explicitly_recruiting"
+    assert all(e["gone_at"] is None for e in detail["evidence"])

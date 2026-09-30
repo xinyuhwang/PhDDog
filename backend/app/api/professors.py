@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import DB, CurrentUser, get_professor
 from app.api.schemas import (
     BulkIn,
+    EvidenceIn,
     HomepageIn,
     ParseIn,
     ProfessorDetail,
@@ -14,19 +16,22 @@ from app.api.schemas import (
     ProfessorSummary,
     ScreenOut,
 )
-from app.db.models import Professor, School
+from app.config import get_settings
+from app.db.models import Evidence, Professor, School
 from app.llm.schemas import ParsedEntry
 from app.services import professors as svc
 from app.services.profile import active_profile
 from app.services.screen import latest_results, request_screen
 
 router = APIRouter(prefix="/professors", tags=["professors"])
-EDITABLE_EXTRACTED = set(svc.EXTRACTED_FIELDS)
+EDITABLE_EXTRACTED = set(svc.EXTRACTED_FIELDS) | set(svc.EVIDENCE_FIELDS)
 
 
 def _summary(prof: Professor, screen) -> dict:
+    recheck_before = datetime.now(UTC) - timedelta(days=get_settings().recheck_after_days)
     data = ProfessorSummary.model_validate(
-        {**{c: getattr(prof, c) for c in ProfessorSummary.model_fields if hasattr(prof, c)}, "school_name": prof.school.name}
+        {**{c: getattr(prof, c) for c in ProfessorSummary.model_fields if hasattr(prof, c)}, "school_name": prof.school.name,
+         "check_stale": bool(prof.last_checked_at and prof.last_checked_at < recheck_before)}
     ).model_dump()
     data["screen"] = ScreenOut.model_validate(screen).model_dump() if screen else None
     return data
@@ -68,6 +73,7 @@ def get_detail(professor_id: uuid.UUID, db: DB, user: CurrentUser):
     data = _summary(prof, screen)
     data.update({c: getattr(prof, c) for c in ProfessorDetail.model_fields if c not in data and hasattr(prof, c)})
     data["candidates"] = prof.candidates
+    data["evidence"] = prof.evidence
     data["pages"] = [
         {"url": p.final_url or p.url, "kind": p.kind, "fetch_status": p.fetch_status, "error": p.error,
          "fetched_at": p.fetched_at}
@@ -101,6 +107,35 @@ def delete(professor_id: uuid.UUID, db: DB, user: CurrentUser):
 def set_homepage(professor_id: uuid.UUID, body: HomepageIn, db: DB, user: CurrentUser):
     svc.set_homepage(db, get_professor(db, user, professor_id), body.url.strip())
     return {"queued": True}
+
+
+@router.post("/{professor_id}/evidence")
+def submit_evidence(professor_id: uuid.UUID, body: EvidenceIn, db: DB, user: CurrentUser):
+    """Add a page (and optionally the exact sentence) that says whether they recruit or how to contact them."""
+    prof = get_professor(db, user, professor_id)
+    try:
+        claims = svc.submit_evidence(db, prof, body.url.strip(), body.quote, body.claim, body.cycle)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"added": len(claims)}
+
+
+@router.delete("/evidence/{evidence_id}", status_code=204)
+def delete_evidence(evidence_id: uuid.UUID, db: DB, user: CurrentUser):
+    """Remove evidence you added. Evidence found by the crawler can't be deleted, only outdated by a re-check."""
+    ev = db.get(Evidence, evidence_id)
+    if ev is None:
+        raise HTTPException(404)
+    prof = get_professor(db, user, ev.professor_id)
+    if ev.extractor != "user":
+        raise HTTPException(400, "Only evidence you added can be removed.")
+    db.delete(ev)
+    db.flush()
+    db.refresh(prof)
+    from app.services.evidence import apply_summary
+
+    apply_summary(prof)
+    db.commit()
 
 
 @router.post("/{professor_id}/refresh", status_code=202)
