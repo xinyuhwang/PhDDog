@@ -283,11 +283,11 @@ class FakeLLM:
         if bio:
             out.bio_summary = bio
 
-        self._extract_recruiting(pages, out)
+        self._extract_recruiting(pages, out, name)
         out.recent_publications = _find_publications(pages)
         return out
 
-    def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile) -> None:
+    def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile, name: str = "") -> None:
         not_recruiting = re.compile(
             r"\b(not (?:currently )?(?:recruiting|accepting|taking)(?: new)? (?:ph\.?d\.? )?students|no (?:open )?(?:positions|openings))\b", re.I
         )
@@ -295,14 +295,33 @@ class FakeLLM:
             r"\b(looking for|recruiting|seeking|hiring|accepting|open positions?|openings)\b[^.]{0,120}\b(ph\.?\s?d|students?|postdocs?)\b",
             re.I,
         )
+        # Recruiting statements about other roles say nothing about PhD openings.
+        other_roles = re.compile(
+            r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*)\b", re.I
+        )
+        phd_re = re.compile(r"\b(ph\.?\s?d|doctoral|graduate students?)\b", re.I)
+        # "our PhD students" are the lab's current members, not applicants.
+        members = re.compile(r"\b(our|current|my|the lab'?s)\s+(ph\.?\s?d\.?\s+students?|doctoral students?|postdocs?)", re.I)
+
+        class _Phd:
+            @staticmethod
+            def search(text: str):
+                return phd_re.search(members.sub("", text))
+
+        phd = _Phd()
         general = re.compile(r"\b(every year|each year|always|frequently|regularly|from time to time)\b", re.I)
         do_not_email = re.compile(
             r"\b(cannot|can't|can not|unable to|won't|will not|do not|don't|not able to)\s+(?:\w+\s+){0,3}(respond|reply|answer)\b"
             r"|\b(?:please\s+)?(?:do not|don't)\s+(?:e-?mail|contact)\s+me\b", re.I
         )
+        # "me", or the professor's own name ("please list Eric Eaton as a prospective advisor").
+        who = "|".join(["me", *(re.escape(n) for n in {name, name.split()[-1]} if n)])
+        name_me_as_advisor = re.compile(
+            rf"\b(?:mention|list|name|select|indicate|choose|put|call)\s+(?:(?:prof(?:essor)?\.?|dr\.?)\s+)?(?:{who})\b(?:\s+out)?[^.]{{0,80}}\b(application|advisor|adviser|statement)",
+            re.I,
+        )
         apply_program = re.compile(
-            r"\bapply (?:to|through|via|directly to) the\b|\b(?:mention|list|name|select)\s+me\b[^.]{0,60}\b(application|advisor)"
-            r"|\bnot necessary to e-?mail\b", re.I
+            r"\bapply (?:to|through|via|directly to) the\b|\bnot necessary to e-?mail\b", re.I
         )
         welcomes = re.compile(r"\b(feel free to|please|welcome to)\s+(e-?mail|contact|reach out)\b|\be-?mail me\b", re.I)
 
@@ -318,16 +337,25 @@ class FakeLLM:
                     cycle = f"{season.title()} {year}"
 
                 recruit = None
-                if not_recruiting.search(s):
+                if other_roles.search(s) and not phd.search(s):
+                    pass
+                elif not_recruiting.search(s):
                     recruit = "not_recruiting"
                 elif recruiting.search(s):
                     recruit = "recruits_generally" if general.search(s) and not cycle else "explicitly_recruiting"
+                # "Apply and list me as a potential advisor" invites PhD applications: open to students, undated.
+                if recruit is None and name_me_as_advisor.search(s) and not (other_roles.search(s) and not phd.search(s)):
+                    recruit = "recruits_generally"
                 if recruit and ("recruiting", s) not in seen:
                     seen.add(("recruiting", s))
                     out.claims.append(Claim(kind="recruiting", claim=recruit, cycle=cycle, quote=s, source_url=p.url))
 
-                for policy, pattern in (("do_not_email", do_not_email), ("apply_via_program", apply_program), ("welcomes_email", welcomes)):
-                    if pattern.search(s):
+                about_other_roles = bool(other_roles.search(s) and not phd.search(s))
+                for policy, pattern in (
+                    ("do_not_email", do_not_email), ("apply_via_program", apply_program),
+                    ("apply_via_program", name_me_as_advisor), ("welcomes_email", welcomes),
+                ):
+                    if not about_other_roles and pattern.search(s):
                         if ("contact_policy", s) not in seen:
                             seen.add(("contact_policy", s))
                             out.claims.append(Claim(kind="contact_policy", claim=policy, quote=s, source_url=p.url))

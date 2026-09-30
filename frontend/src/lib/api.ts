@@ -124,6 +124,7 @@ export type Evidence = {
   last_seen_at: string;
   gone_at: string | null;
   extractor: string;
+  verified: boolean;
 };
 
 export type PaperSummary = {

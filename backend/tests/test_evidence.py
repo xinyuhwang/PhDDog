@@ -65,3 +65,14 @@ def test_page_updated_at():
     assert page_updated_at(None, "Last updated: March 3, 2026").date().isoformat() == "2026-03-03"
     assert page_updated_at("Wed, 01 Jul 2026 10:00:00 GMT", "no date here").date().isoformat() == "2026-07-01"
     assert page_updated_at(None, "nothing") is None
+
+
+def test_undated_invitation_does_not_outrank_dated_statement_on_same_page():
+    dated = ev("explicitly_recruiting", "Fall 2026")
+    invite = ev("recruits_generally")  # same source_url
+    s = summarize([dated, invite], "Fall 2027")
+    assert (s.recruiting_status, s.recruiting_cycle, s.recruiting_stale) == ("explicitly_recruiting", "Fall 2026", True)
+
+
+def test_lab_site_pages_are_labs():
+    assert classify_source("https://www.arcade.cs.x.edu/contact", "lab_site", "x.edu") == "lab"

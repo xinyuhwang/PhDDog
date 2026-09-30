@@ -42,9 +42,11 @@ def cycle_year(cycle: str | None) -> int | None:
 def classify_source(url: str, page_kind: str, school_domain: str | None) -> str:
     """personal | lab | faculty_profile | admissions, from the URL. (department / other are reserved.)"""
     parts = urlsplit(url)
-    host, path = parts.netloc.lower().split(":")[0], parts.path
+    host, path = parts.netloc.lower().split(":")[0].removeprefix("www."), parts.path
     if ADMISSIONS_PATH.search(path):
         return "admissions"
+    if page_kind == "lab_site":  # reached through a "… Lab" link from their own site
+        return "lab"
     if LAB_HOST.search(host.split(".")[0]) or LAB_PATH.search(path):
         return "lab"
     if PERSONAL_HOSTS.search(host) or "/~" in path:
@@ -85,17 +87,17 @@ def _hash(quote: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", " ", quote).strip().lower().encode()).hexdigest()[:32]
 
 
-def record(
-    db: Session, prof: Professor, claims: list[Claim], pages: list[SourcePage], failed_urls: set[str], extractor: str,
-) -> None:
-    """Upsert this crawl's claims. Earlier claims no longer found on a page we re-read are marked gone."""
+USER = "user"  # extractor name for evidence the user submitted
+
+
+def upsert(db: Session, prof: Professor, claims: list[tuple[Claim, str]], pages: list[SourcePage]) -> set[tuple]:
+    """Add or refresh evidence rows for (claim, extractor) pairs. Returns the keys seen."""
     now = datetime.now(UTC)
     school_domain = prof.school.primary_domain
     page_by_url = {p.final_url or p.url: p for p in pages}
     existing = {(e.kind, e.source_url, e.quote_hash): e for e in prof.evidence}
-    seen: set[tuple[str, str, str]] = set()
-
-    for c in claims:
+    seen: set[tuple] = set()
+    for c, extractor in claims:
         key = (c.kind, c.source_url, _hash(c.quote))
         seen.add(key)
         page = page_by_url.get(c.source_url)
@@ -106,15 +108,40 @@ def record(
             )
             db.add(row)
             prof.evidence.append(row)
+            existing[key] = row
+        elif row.extractor == USER:
+            extractor = USER  # a statement the user vouched for stays theirs
         row.claim, row.cycle = c.claim, c.cycle
         row.source_type = classify_source(c.source_url, page.kind if page else "other", school_domain)
         row.page_updated_at = page.page_updated_at if page else None
-        row.last_seen_at, row.gone_at, row.extractor = now, None, extractor
+        row.last_seen_at, row.gone_at, row.extractor, row.verified = now, None, extractor, True
+    return seen
 
-    for key, row in existing.items():
-        # A page that failed to load this time says nothing either way; keep its evidence as is.
-        if key not in seen and row.gone_at is None and row.source_url not in failed_urls:
+
+def record(
+    db: Session, prof: Professor, claims: list[tuple[Claim, str]], pages: list[SourcePage], failed_urls: set[str],
+) -> None:
+    """Upsert a full crawl's claims. Earlier claims no longer found on a page we re-read are marked gone."""
+    now = datetime.now(UTC)
+    seen = upsert(db, prof, claims, pages)
+    read_ok = {p.final_url or p.url for p in pages}
+    for row in prof.evidence:
+        key = (row.kind, row.source_url, row.quote_hash)
+        if key in seen or row.gone_at is not None:
+            continue
+        # Gone only if we re-read the page and the sentence is missing, or the page is no longer linked
+        # in a crawl where nothing failed. A failed page (or one we couldn't reach because the page
+        # linking to it failed) says nothing either way.
+        if row.source_url in read_ok or (not failed_urls and row.source_url not in read_ok):
             row.gone_at = now
+
+
+def user_claims(prof: Professor) -> list[Claim]:
+    """Statements the user submitted, to re-check on every crawl like any other evidence."""
+    return [
+        Claim(kind=e.kind, claim=e.claim, cycle=e.cycle, quote=e.quote, source_url=e.source_url)
+        for e in prof.evidence if e.extractor == USER
+    ]
 
 
 @dataclass
@@ -144,6 +171,10 @@ def summarize(evidence: list[Evidence], target_cycle: str) -> Summary:
         return 2 if target is None or year >= target else 0
 
     recruiting = [e for e in current if e.kind == "recruiting"]
+    # An undated general statement ("apply and name me") on a page that also has a dated one belongs to
+    # that dated statement; it mustn't make an old cycle look current.
+    dated_pages = {e.source_url for e in recruiting if e.cycle}
+    recruiting = [e for e in recruiting if e.cycle or e.claim != "recruits_generally" or e.source_url not in dated_pages]
     best = max(
         recruiting,
         key=lambda e: (freshness(e), TRUST.get(e.source_type, 1), e.claim != "recruits_generally", e.last_seen_at),
@@ -157,10 +188,10 @@ def summarize(evidence: list[Evidence], target_cycle: str) -> Summary:
         trusted = TRUST.get(best.source_type, 1) >= 2
         if stale or not trusted:
             confidence = "low"
-        elif freshness(best) == 2 and best.claim != "recruits_generally":
+        elif freshness(best) == 2 and best.claim != "recruits_generally" and best.verified is not False:
             confidence = "high"
         else:
-            confidence = "medium"
+            confidence = "medium"  # includes sentences the app couldn't check on the page itself
 
     contacts = [e for e in current if e.kind == "contact_policy"]
     own = [e for e in contacts if TRUST.get(e.source_type, 1) >= 2] or contacts

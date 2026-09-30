@@ -100,6 +100,7 @@ class EvidenceOut(ORM):
     last_seen_at: datetime
     gone_at: datetime | None
     extractor: str
+    verified: bool
 
 
 class ProfessorDetail(ProfessorSummary):
@@ -138,6 +139,16 @@ class ProfessorPatch(BaseModel):
 
 class HomepageIn(BaseModel):
     url: str
+
+
+class EvidenceIn(BaseModel):
+    url: str
+    quote: str | None = None
+    claim: Literal[
+        "explicitly_recruiting", "recruits_generally", "not_recruiting",
+        "welcomes_email", "apply_via_program", "do_not_email",
+    ] | None = None
+    cycle: str | None = None
 
 
 class PaperUrlIn(BaseModel):

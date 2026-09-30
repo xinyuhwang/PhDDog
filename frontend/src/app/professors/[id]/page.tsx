@@ -63,7 +63,7 @@ export default function ProfessorPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <RecruitingPanel prof={prof} targetCycle={health?.target_cycle ?? "your target cycle"} busy={busy}
-          onRecheck={async () => { await api.post(`/professors/${id}/refresh`); refreshJobs(); }} />
+          onRecheck={async () => { await api.post(`/professors/${id}/refresh`); refreshJobs(); }} onChanged={reload} />
 
         <Card title="Research" actions={<Button variant="secondary" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</Button>}>
           {editing ? <EditDetails prof={prof} onSaved={() => { setEditing(false); reload(); }} /> : (

@@ -144,7 +144,7 @@ class SourcePage(TimestampMixin, Base):
     professor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("professors.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(String)
     final_url: Mapped[str | None] = mapped_column(String)
-    kind: Mapped[str] = mapped_column(String)  # homepage | subpage | linked_site
+    kind: Mapped[str] = mapped_column(String)  # homepage | subpage | linked_site | lab_site | user_submitted
     raw_html_path: Mapped[str | None] = mapped_column(String)
     text: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -181,6 +181,8 @@ class Evidence(TimestampMixin, Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     gone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     extractor: Mapped[str] = mapped_column(String)
+    # False only for sentences the user added from a page the app couldn't read (e.g. bot protection).
+    verified: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     professor: Mapped[Professor] = relationship(back_populates="evidence")
 

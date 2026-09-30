@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     llm_provider: str = "fake"
     anthropic_api_key: str | None = None
     claude_model: str = "claude-opus-5-5"
+    # LLM_PROVIDER=ollama: a local model for profile extraction; other tasks use the offline rules.
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
 
     # Sent in the User-Agent and to Unpaywall (which requires an email).
     contact_email: str = "phddog@example.com"
