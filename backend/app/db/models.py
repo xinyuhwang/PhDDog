@@ -95,6 +95,8 @@ class Professor(TimestampMixin, Base):
     recruiting_status: Mapped[str] = mapped_column(String, default="unknown")
     recruiting_cycle: Mapped[str | None] = mapped_column(String)
     recruiting_stale: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Cached summary of the Evidence rows (app/services/evidence.py): high | medium | low, None if no evidence.
+    recruiting_confidence: Mapped[str | None] = mapped_column(String)
     # welcomes_email | apply_via_program | do_not_email | unknown
     contact_policy: Mapped[str] = mapped_column(String, default="unknown")
     recruiting_evidence: Mapped[str | None] = mapped_column(Text)
@@ -119,6 +121,9 @@ class Professor(TimestampMixin, Base):
         back_populates="professor", cascade="all, delete-orphan"
     )
     papers: Mapped[list["Paper"]] = relationship(back_populates="professor", cascade="all, delete-orphan")
+    evidence: Mapped[list["Evidence"]] = relationship(
+        back_populates="professor", cascade="all, delete-orphan", order_by="Evidence.first_seen_at"
+    )
 
 
 class HomepageCandidate(TimestampMixin, Base):
@@ -143,10 +148,41 @@ class SourcePage(TimestampMixin, Base):
     raw_html_path: Mapped[str | None] = mapped_column(String)
     text: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the page itself says it was updated (Last-Modified header or "Last updated" text), if known.
+    page_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fetch_status: Mapped[str] = mapped_column(String, default="pending")  # pending | ok | failed | blocked
     error: Mapped[str | None] = mapped_column(Text)
 
     professor: Mapped[Professor] = relationship(back_populates="source_pages")
+
+
+class Evidence(TimestampMixin, Base):
+    """A quoted statement about recruiting or contact policy, with where and when it was seen.
+
+    Rows are kept when a statement disappears from its page (gone_at is set), so the history of
+    what a professor said stays visible.
+    """
+
+    __tablename__ = "evidence"
+    __table_args__ = (UniqueConstraint("professor_id", "kind", "source_url", "quote_hash"),)
+
+    professor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("professors.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # recruiting | contact_policy
+    # recruiting: explicitly_recruiting | recruits_generally | not_recruiting
+    # contact_policy: welcomes_email | apply_via_program | do_not_email
+    claim: Mapped[str] = mapped_column(String)
+    cycle: Mapped[str | None] = mapped_column(String)
+    quote: Mapped[str] = mapped_column(Text)
+    quote_hash: Mapped[str] = mapped_column(String)
+    source_url: Mapped[str] = mapped_column(String)
+    source_type: Mapped[str] = mapped_column(String)  # personal | lab | faculty_profile | department | admissions | other
+    page_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    gone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    extractor: Mapped[str] = mapped_column(String)
+
+    professor: Mapped[Professor] = relationship(back_populates="evidence")
 
 
 class ScreenResult(TimestampMixin, Base):

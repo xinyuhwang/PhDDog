@@ -13,17 +13,16 @@ from app.ingest.fetch import FetchResult, fetch
 from app.ingest.html import html_to_text, own_site_links, subpage_links
 from app.llm import get_llm
 from app.llm.schemas import ExtractedProfile, PageText, ParsedEntry
+from app.services import evidence as evidence_svc
 from app.services.jobs import enqueue, handler
 from app.services.schools import get_or_create_school, known_aliases
 from app.storage.local import save_bytes, sha256
 
 AUTO_ACCEPT_CONFIDENCE = 0.8
 # Fields a refresh may overwrite unless the user edited them.
-EXTRACTED_FIELDS = [
-    "title", "department", "email", "lab_url", "stated_interests", "bio_summary", "recent_publications",
-    "recruiting_status", "recruiting_cycle", "recruiting_evidence", "recruiting_source_url",
-    "contact_policy", "contact_evidence", "contact_source_url",
-]
+EXTRACTED_FIELDS = ["title", "department", "email", "lab_url", "stated_interests", "bio_summary", "recent_publications"]
+# Summarized from evidence (app/services/evidence.py); the user can still override them.
+EVIDENCE_FIELDS = ["recruiting_status", "contact_policy"]
 
 
 def normalize_name(name: str) -> str:
@@ -170,6 +169,7 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
             page.final_url = r.final_url
             page.raw_html_path = save_bytes(r.content, "pages", str(prof.id), f"{sha256(r.content)}.html")
             page.text = html_to_text(html)
+            page.page_updated_at = evidence_svc.page_updated_at(r.last_modified, page.text)
             page.fetch_status, page.error = "ok", None
         except Exception as e:  # noqa: BLE001
             html = None
@@ -193,17 +193,21 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
         page, _ = load(url, "linked_site")
         if page.fetch_status == "ok":
             pages.append(page)
+    failed_urls = {p.url for p in existing.values() if p.fetch_status == "failed"}
     # Drop pages from earlier crawls that this crawl no longer reaches.
     for stale in set(existing.values()) - set(pages):
         db.delete(stale)
     db.flush()
 
     page_texts = [PageText(url=p.final_url or p.url, text=p.text or "", kind=p.kind) for p in pages]
-    extracted = get_llm().extract_profile(page_texts, prof.name, prof.school.primary_domain)
-    _drop_unverified_quotes(extracted, page_texts)
+    llm = get_llm()
+    extracted = llm.extract_profile(page_texts, prof.name, prof.school.primary_domain)
+    extracted.claims = verified_claims(extracted, page_texts)
     if linked and not extracted.lab_url:
         extracted.lab_url = linked[0]
     _apply_extracted(prof, extracted)
+    evidence_svc.record(db, prof, extracted.claims, pages, failed_urls, extractor=llm.name)
+    evidence_svc.apply_summary(prof)
 
     prof.resolve_status, prof.resolve_error = "resolved", None
     prof.last_checked_at = datetime.now(UTC)
@@ -222,22 +226,10 @@ def _squash(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def _drop_unverified_quotes(extracted: ExtractedProfile, pages: list[PageText]) -> None:
-    """A recruiting/contact claim must quote text that is really on the page it cites."""
+def verified_claims(extracted: ExtractedProfile, pages: list[PageText]) -> list:
+    """Keep only claims whose quote really appears on the page it cites."""
     texts = {p.url: _squash(p.text) for p in pages}
-    for field in ("recruiting_evidence", "contact_evidence"):
-        ev = getattr(extracted, field)
-        if ev and _squash(ev.quote) not in texts.get(ev.source_url, ""):
-            setattr(extracted, field, None)
-            if field == "recruiting_evidence":
-                extracted.recruiting_status, extracted.recruiting_cycle = "unknown", None
-            else:
-                extracted.contact_policy = "unknown"
-
-
-def cycle_year(cycle: str | None) -> int | None:
-    m = re.search(r"(20\d{2})", cycle or "")
-    return int(m.group(1)) if m else None
+    return [c for c in extracted.claims if _squash(c.quote) in texts.get(c.source_url, "")]
 
 
 def _apply_extracted(prof: Professor, x: ExtractedProfile) -> None:
@@ -249,18 +241,8 @@ def _apply_extracted(prof: Professor, x: ExtractedProfile) -> None:
         "stated_interests": x.stated_interests,
         "bio_summary": x.bio_summary,
         "recent_publications": [p.model_dump() for p in x.recent_publications],
-        "recruiting_status": x.recruiting_status,
-        "recruiting_cycle": x.recruiting_cycle,
-        "recruiting_evidence": x.recruiting_evidence.quote if x.recruiting_evidence else None,
-        "recruiting_source_url": x.recruiting_evidence.source_url if x.recruiting_evidence else None,
-        "contact_policy": x.contact_policy,
-        "contact_evidence": x.contact_evidence.quote if x.contact_evidence else None,
-        "contact_source_url": x.contact_evidence.source_url if x.contact_evidence else None,
     }
     for field in EXTRACTED_FIELDS:
         if field not in prof.user_overrides:
             setattr(prof, field, values[field])
     prof.field_sources = x.field_sources
-    target = cycle_year(get_settings().target_cycle)
-    year = cycle_year(prof.recruiting_cycle)
-    prof.recruiting_stale = bool(target and year and year < target)

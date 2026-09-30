@@ -137,3 +137,32 @@ def test_needs_review_when_no_homepage_found(client):
     client.post(f"/professors/{prof['id']}/homepage", json={"url": "https://jg.example.edu/"})
     run_jobs()
     assert client.get(f"/professors/{prof['id']}").json()["resolve_status"] == "resolved"
+
+
+def test_evidence_history_when_page_changes(database, monkeypatch):
+    import app.services.professors as prof_svc
+    from app.main import app
+
+    pages = {"https://hist.example.edu/~kim/": "<p>Kim Lee is a professor. I am recruiting PhD students for Fall 2027.</p>"}
+
+    def fetch(url, check_robots=True):
+        return FetchResult(url=url, final_url=url, status_code=200, content_type="text/html", content=pages[url].encode(),
+                           last_modified="Wed, 01 Jul 2026 10:00:00 GMT")
+
+    monkeypatch.setattr(prof_svc, "fetch", fetch)
+    client = TestClient(app)
+    [prof] = client.post("/professors/bulk", json={"entries": [
+        {"raw": "k", "name": "Kim Lee", "school_raw": "Example State", "url": "https://hist.example.edu/~kim/"}]}).json()
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert (detail["recruiting_status"], detail["recruiting_confidence"]) == ("explicitly_recruiting", "high")
+    [ev] = detail["evidence"]
+    assert ev["source_type"] == "personal" and ev["gone_at"] is None and ev["page_updated_at"].startswith("2026-07-01")
+
+    pages["https://hist.example.edu/~kim/"] = "<p>Kim Lee is a professor working on clinical NLP.</p>"
+    client.post(f"/professors/{prof['id']}/refresh")
+    run_jobs()
+    detail = client.get(f"/professors/{prof['id']}").json()
+    assert detail["recruiting_status"] == "unknown" and detail["recruiting_confidence"] is None
+    [ev] = detail["evidence"]
+    assert ev["gone_at"] is not None  # kept as history, no longer counted

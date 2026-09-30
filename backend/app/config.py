@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     paper_year_window: int = 2
 
     fetch_cache_days: int = 7
+    # A professor's site check older than this is flagged in the UI as needing a re-check.
+    recheck_after_days: int = 60
     max_subpages: int = 8
     cors_origins: list[str] = ["http://localhost:3000"]
 

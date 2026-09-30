@@ -11,6 +11,11 @@ from pydantic import BaseModel, Field
 
 RecruitingStatus = Literal["explicitly_recruiting", "recruits_generally", "not_recruiting", "unknown"]
 ContactPolicy = Literal["welcomes_email", "apply_via_program", "do_not_email", "unknown"]
+ClaimKind = Literal["recruiting", "contact_policy"]
+ClaimValue = Literal[
+    "explicitly_recruiting", "recruits_generally", "not_recruiting",  # kind = recruiting
+    "welcomes_email", "apply_via_program", "do_not_email",  # kind = contact_policy
+]
 ScreenLabel = Literal["strong", "possible", "no"]
 ConnectionKind = Literal["method_overlap", "domain_overlap", "future_work_hook"]
 
@@ -49,7 +54,12 @@ class HomepageVerification(BaseModel):
     reason: str
 
 
-class Evidence(BaseModel):
+class Claim(BaseModel):
+    """One statement on a page about recruiting or how to contact the professor, quoted verbatim."""
+
+    kind: ClaimKind
+    claim: ClaimValue
+    cycle: str | None = None  # e.g. "Fall 2026" if the statement names one
     quote: str
     source_url: str
 
@@ -68,11 +78,8 @@ class ExtractedProfile(BaseModel):
     stated_interests: str | None = None
     bio_summary: str | None = None
     recent_publications: list[PubRef] = Field(default_factory=list)
-    recruiting_status: RecruitingStatus = "unknown"
-    recruiting_cycle: str | None = None
-    recruiting_evidence: Evidence | None = None
-    contact_policy: ContactPolicy = "unknown"
-    contact_evidence: Evidence | None = None
+    # Every recruiting / contact statement found. Status and confidence are computed from these in code.
+    claims: list[Claim] = Field(default_factory=list)
     field_sources: dict[str, str] = Field(default_factory=dict)
 
 

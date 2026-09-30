@@ -228,6 +228,32 @@ The LLM reads the text and returns one record per entry:
 Quotes are checked against the saved page text. A field whose quote can't
 be found is thrown out, not kept.
 
+#### Step 5: Evidence and status (deterministic code, no model)
+
+Extraction returns every recruiting and contact-policy statement it finds as
+a **claim** (claim, cycle, exact quote, source URL). Each is stored as an
+`evidence` row with its source type (`personal | lab | faculty_profile |
+department | admissions`, classified from the URL), the page's own "last
+updated" date when known, and first-seen / last-seen times. A statement that
+disappears from a page on a later check is kept, marked `gone_at`, and no
+longer counts.
+
+The professor's status and confidence are computed from current evidence:
+
+- **Pick:** a statement naming the target cycle (or later) beats an undated
+  one, which beats one naming an earlier cycle; then the more personal
+  source; then explicit statements over "every year" ones.
+- **Confidence:** *high* = explicit statement for the target cycle on their
+  own page; *medium* = their own page, but undated or a general statement;
+  *low* = an earlier cycle, or not from their own page.
+- **Contact policy:** the most restrictive statement from their own pages.
+
+The UI never turns missing evidence into "no": it shows **"No recruiting
+evidence found"** or **"Only older evidence"** with the last-checked date and
+a re-check button, and flags checks older than `RECHECK_AFTER_DAYS` (60).
+Pages the crawler couldn't read (e.g. 403) are listed so the user can check
+them by hand.
+
 **Refresh:** the user can re-run Step 4 on demand. It is worth re-checking
 in October–November, when many professors update their recruiting notes.
 
@@ -377,6 +403,12 @@ professors
   user_overrides (jsonb: fields the user edited; never overwritten),
   last_checked_at, status (enum, see §4.5), notes
   UNIQUE (school_id, normalized_name)
+
+evidence
+  professor_id, kind (recruiting | contact_policy), claim, cycle,
+  quote, quote_hash, source_url, source_type, page_updated_at,
+  first_seen_at, last_seen_at, gone_at, extractor
+  UNIQUE (professor_id, kind, source_url, quote_hash)
 
 homepage_candidates
   professor_id, url, source (user | search | directory_link),

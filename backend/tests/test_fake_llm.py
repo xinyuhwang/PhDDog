@@ -55,9 +55,8 @@ def test_extract_recruiting_and_contact_policy():
     ))
     x = llm.extract_profile([home], "Mark Yatskar", "upenn.edu")
     assert x.title == "Assistant Professor"
-    assert x.recruiting_status == "recruits_generally"
-    assert x.contact_policy == "do_not_email"
-    assert x.contact_evidence.quote.startswith("Because of the volume")
+    assert [(c.kind, c.claim) for c in x.claims] == [("recruiting", "recruits_generally"), ("contact_policy", "do_not_email")]
+    assert x.claims[1].quote.startswith("Because of the volume")
     assert x.email == "myatskar@cis.upenn.edu"
 
 
@@ -67,9 +66,9 @@ def test_extract_cycle_takes_latest_year():
         "If you are interested, apply to the CIS PhD Program directly, but do mention me in your application!"
     ))
     x = llm.extract_profile([page], "Jacob Gardner", "upenn.edu")
-    assert x.recruiting_status == "explicitly_recruiting"
-    assert x.recruiting_cycle == "Fall 2026"
-    assert x.contact_policy == "apply_via_program"
+    recruiting, contact = x.claims
+    assert (recruiting.claim, recruiting.cycle) == ("explicitly_recruiting", "Fall 2026")
+    assert contact.claim == "apply_via_program"
 
 
 def test_screen_labels():

@@ -104,7 +104,11 @@ export default function ProfessorsPage() {
                       {p.screen && <div className="mt-1 max-w-56 text-xs text-stone-500">{p.screen.reason}</div>}
                     </td>
                   )}
-                  <td className="pr-3"><RecruitingBadge status={p.recruiting_status} cycle={p.recruiting_cycle} stale={p.recruiting_stale} /></td>
+                  <td className="pr-3">
+                    <RecruitingBadge status={p.recruiting_status} cycle={p.recruiting_cycle} stale={p.recruiting_stale} />
+                    {p.recruiting_confidence && <div className="mt-1 text-xs text-stone-500">{p.recruiting_confidence} confidence</div>}
+                    {p.check_stale && <div className="mt-1 text-xs text-amber-700" title="Last site check is old">⚠ checked {new Date(p.last_checked_at!).toLocaleDateString()}</div>}
+                  </td>
                   <td className="pr-3"><ContactBadge policy={p.contact_policy} /></td>
                   <td className="pr-3"><StageBadge status={p.status} /></td>
                   <td className="whitespace-nowrap">

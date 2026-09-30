@@ -81,7 +81,10 @@ export type ProfessorSummary = {
   recruiting_status: string;
   recruiting_cycle: string | null;
   recruiting_stale: boolean;
+  recruiting_confidence: "high" | "medium" | "low" | null;
   contact_policy: string;
+  last_checked_at: string | null;
+  check_stale: boolean;
   status: string;
   screen: Screen | null;
 };
@@ -102,10 +105,25 @@ export type ProfessorDetail = ProfessorSummary & {
   contact_source_url: string | null;
   field_sources: Record<string, string>;
   user_overrides: string[];
-  last_checked_at: string | null;
   notes: string | null;
+  evidence: Evidence[];
   candidates: Candidate[];
   pages: { url: string; kind: string; fetch_status: string; error: string | null; fetched_at: string | null }[];
+};
+
+export type Evidence = {
+  id: string;
+  kind: "recruiting" | "contact_policy";
+  claim: string;
+  cycle: string | null;
+  quote: string;
+  source_url: string;
+  source_type: string;
+  page_updated_at: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  gone_at: string | null;
+  extractor: string;
 };
 
 export type PaperSummary = {

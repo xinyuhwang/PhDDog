@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ContactBadge, ErrorNote, FitBadge, inputClass, PinButton, Quote, RecruitingBadge, ResolveBadge, StageBadge } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, FitBadge, inputClass, PinButton, ResolveBadge, StageBadge } from "@/components/ui";
 import { api, type Job, type ProfessorDetail } from "@/lib/api";
-import { useApi, useShowFit } from "@/lib/hooks";
+import { useApi, useHealth, useShowFit } from "@/lib/hooks";
 
 import EmailPanel from "./EmailPanel";
 import PapersPanel from "./PapersPanel";
+import RecruitingPanel from "./RecruitingPanel";
 
 export default function ProfessorPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,7 @@ export default function ProfessorPage() {
   const { data: prof, error, reload } = useApi<ProfessorDetail>(`/professors/${id}`, (p) => p.resolve_status === "pending" || busy);
   const [editing, setEditing] = useState(false);
   const showFit = useShowFit();
+  const health = useHealth();
   const loaded = !!prof;
   useEffect(() => {
     // Content renders after data loads, so a #papers / #email link needs a scroll once it's there.
@@ -54,32 +56,14 @@ export default function ProfessorPage() {
           {prof.status !== "dismissed"
             ? <Button variant="secondary" onClick={() => setStatus("dismissed")}>Dismiss</Button>
             : <Button variant="secondary" onClick={() => setStatus("screened")}>Restore</Button>}
-          <Button variant="secondary" disabled={!prof.homepage_url || busy} onClick={async () => { await api.post(`/professors/${id}/refresh`); refreshJobs(); }}>
-            {busy ? "Working…" : "Re-check site"}
-          </Button>
         </div>
       </div>
 
       {prof.resolve_status !== "resolved" && <ResolvePanel prof={prof} onChanged={refreshJobs} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Recruiting & contact policy">
-          <div className="space-y-4">
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-sm font-medium">Recruiting <RecruitingBadge status={prof.recruiting_status} cycle={prof.recruiting_cycle} stale={prof.recruiting_stale} /></div>
-              {prof.recruiting_evidence ? <Quote text={prof.recruiting_evidence} url={prof.recruiting_source_url} /> : <p className="text-sm text-stone-500">No recruiting statement found on their site.</p>}
-            </div>
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-sm font-medium">Contact policy <ContactBadge policy={prof.contact_policy} /></div>
-              {prof.contact_evidence ? <Quote text={prof.contact_evidence} url={prof.contact_source_url} /> : <p className="text-sm text-stone-500">No contact policy found.</p>}
-            </div>
-            <p className="text-xs text-stone-500">
-              Checked {prof.pages.filter((p) => p.fetch_status === "ok").length} page(s)
-              {prof.last_checked_at && ` · ${new Date(prof.last_checked_at).toLocaleString()}`}
-              {prof.pages.some((p) => p.fetch_status !== "ok") && ` · ${prof.pages.filter((p) => p.fetch_status !== "ok").length} failed`}
-            </p>
-          </div>
-        </Card>
+        <RecruitingPanel prof={prof} targetCycle={health?.target_cycle ?? "your target cycle"} busy={busy}
+          onRecheck={async () => { await api.post(`/professors/${id}/refresh`); refreshJobs(); }} />
 
         <Card title="Research" actions={<Button variant="secondary" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit details"}</Button>}>
           {editing ? <EditDetails prof={prof} onSaved={() => { setEditing(false); reload(); }} /> : (

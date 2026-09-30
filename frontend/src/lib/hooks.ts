@@ -4,10 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 
 import { api, type Health } from "./api";
 
+export function useHealth(): Health | undefined {
+  return useApi<Health>("/health").data;
+}
+
 /** Research fit is hidden in offline mode: keyword matching isn't a real fit judgment. */
 export function useShowFit(): boolean {
-  const { data } = useApi<Health>("/health");
-  return !!data && data.llm_provider !== "fake";
+  const health = useHealth();
+  return !!health && health.llm_provider !== "fake";
 }
 
 /** Fetch `path`; re-fetch every `intervalMs` while `shouldPoll(data)` is true. */

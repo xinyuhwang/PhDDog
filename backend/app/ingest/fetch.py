@@ -27,6 +27,7 @@ class FetchResult:
     status_code: int
     content_type: str
     content: bytes
+    last_modified: str | None = None
 
     @property
     def text(self) -> str:
@@ -80,6 +81,7 @@ def fetch(url: str, check_robots: bool = True) -> FetchResult:
     return FetchResult(
         url=url, final_url=str(r.url), status_code=r.status_code,
         content_type=r.headers.get("content-type", ""), content=r.content,
+        last_modified=r.headers.get("last-modified"),
     )
 
 

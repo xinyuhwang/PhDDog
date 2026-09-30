@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from app.api.schemas import (
     ProfessorSummary,
     ScreenOut,
 )
+from app.config import get_settings
 from app.db.models import Professor, School
 from app.llm.schemas import ParsedEntry
 from app.services import professors as svc
@@ -21,12 +23,14 @@ from app.services.profile import active_profile
 from app.services.screen import latest_results, request_screen
 
 router = APIRouter(prefix="/professors", tags=["professors"])
-EDITABLE_EXTRACTED = set(svc.EXTRACTED_FIELDS)
+EDITABLE_EXTRACTED = set(svc.EXTRACTED_FIELDS) | set(svc.EVIDENCE_FIELDS)
 
 
 def _summary(prof: Professor, screen) -> dict:
+    recheck_before = datetime.now(UTC) - timedelta(days=get_settings().recheck_after_days)
     data = ProfessorSummary.model_validate(
-        {**{c: getattr(prof, c) for c in ProfessorSummary.model_fields if hasattr(prof, c)}, "school_name": prof.school.name}
+        {**{c: getattr(prof, c) for c in ProfessorSummary.model_fields if hasattr(prof, c)}, "school_name": prof.school.name,
+         "check_stale": bool(prof.last_checked_at and prof.last_checked_at < recheck_before)}
     ).model_dump()
     data["screen"] = ScreenOut.model_validate(screen).model_dump() if screen else None
     return data
@@ -68,6 +72,7 @@ def get_detail(professor_id: uuid.UUID, db: DB, user: CurrentUser):
     data = _summary(prof, screen)
     data.update({c: getattr(prof, c) for c in ProfessorDetail.model_fields if c not in data and hasattr(prof, c)})
     data["candidates"] = prof.candidates
+    data["evidence"] = prof.evidence
     data["pages"] = [
         {"url": p.final_url or p.url, "kind": p.kind, "fetch_status": p.fetch_status, "error": p.error,
          "fetched_at": p.fetched_at}

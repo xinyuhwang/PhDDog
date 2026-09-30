@@ -22,7 +22,7 @@ const RECRUITING: Record<string, [Tone, string]> = {
   explicitly_recruiting: ["green", "Recruiting"],
   recruits_generally: ["blue", "Recruits yearly"],
   not_recruiting: ["red", "Not recruiting"],
-  unknown: ["gray", "Unknown"],
+  unknown: ["gray", "No evidence"],
 };
 const CONTACT: Record<string, [Tone, string]> = {
   welcomes_email: ["green", "Email OK"],

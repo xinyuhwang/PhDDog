@@ -13,7 +13,7 @@ from app.llm.schemas import (
     CandidateOut,
     ConnectionOut,
     EmailOut,
-    Evidence,
+    Claim,
     ExtractedProfile,
     HomepageVerification,
     PageText,
@@ -306,38 +306,32 @@ class FakeLLM:
         )
         welcomes = re.compile(r"\b(feel free to|please|welcome to)\s+(e-?mail|contact|reach out)\b|\be-?mail me\b", re.I)
 
-        found_recruit: tuple[str, str, str] | None = None  # (status, sentence, url)
-        found_contact: tuple[str, str, str] | None = None
-        rank = {"do_not_email": 3, "apply_via_program": 2, "welcomes_email": 1}
-
+        seen: set[tuple[str, str]] = set()
         for p in pages:
             for s in sentences(p.text):
                 if len(s) > 600:
                     continue
-                if found_recruit is None or found_recruit[0] != "explicitly_recruiting":
-                    if not_recruiting.search(s):
-                        found_recruit = found_recruit or ("not_recruiting", s, p.url)
-                    elif recruiting.search(s):
-                        status = "recruits_generally" if general.search(s) and not CYCLE_RE.search(s) else "explicitly_recruiting"
-                        if found_recruit is None or status == "explicitly_recruiting":
-                            found_recruit = (status, s, p.url)
-                for policy, pattern in (("do_not_email", do_not_email), ("apply_via_program", apply_program), ("welcomes_email", welcomes)):
-                    if pattern.search(s) and (found_contact is None or rank[policy] > rank[found_contact[0]]):
-                        found_contact = (policy, s, p.url)
-                        break
+                cycles = CYCLE_RE.findall(s)
+                cycle = None
+                if cycles:
+                    season, year = max(cycles, key=lambda c: int(c[1]))
+                    cycle = f"{season.title()} {year}"
 
-        if found_recruit:
-            status, quote, url = found_recruit
-            out.recruiting_status = status  # type: ignore[assignment]
-            out.recruiting_evidence = Evidence(quote=quote, source_url=url)
-            cycles = CYCLE_RE.findall(quote)
-            if cycles:
-                season, year = max(cycles, key=lambda c: int(c[1]))
-                out.recruiting_cycle = f"{season.title()} {year}"
-        if found_contact:
-            policy, quote, url = found_contact
-            out.contact_policy = policy  # type: ignore[assignment]
-            out.contact_evidence = Evidence(quote=quote, source_url=url)
+                recruit = None
+                if not_recruiting.search(s):
+                    recruit = "not_recruiting"
+                elif recruiting.search(s):
+                    recruit = "recruits_generally" if general.search(s) and not cycle else "explicitly_recruiting"
+                if recruit and ("recruiting", s) not in seen:
+                    seen.add(("recruiting", s))
+                    out.claims.append(Claim(kind="recruiting", claim=recruit, cycle=cycle, quote=s, source_url=p.url))
+
+                for policy, pattern in (("do_not_email", do_not_email), ("apply_via_program", apply_program), ("welcomes_email", welcomes)):
+                    if pattern.search(s):
+                        if ("contact_policy", s) not in seen:
+                            seen.add(("contact_policy", s))
+                            out.claims.append(Claim(kind="contact_policy", claim=policy, quote=s, source_url=p.url))
+                        break
 
     # --- Stage 2 --------------------------------------------------------------------
 
