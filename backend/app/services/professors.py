@@ -247,7 +247,8 @@ def crawl_and_extract(db: Session, prof: Professor, homepage: FetchResult | None
             page.raw_html_path = save_bytes(r.content, "pages", str(prof.id), f"{sha256(r.content)}.html")
             page.text = html_to_text(html)
             page.page_updated_at = evidence_svc.page_updated_at(r.last_modified, page.text)
-            page.fetch_status, page.error = "ok", None
+            page.fetch_status = "ok"
+            page.error = "Site's security certificate chain is incomplete; read without verifying it." if r.tls_unverified else None
         except Exception as e:  # noqa: BLE001
             html = None
             page.fetch_status, page.error = "failed", str(e)

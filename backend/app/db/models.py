@@ -5,10 +5,11 @@ enforced by the Pydantic schemas at the API boundary.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -62,6 +63,8 @@ class School(TimestampMixin, Base):
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     # Candidate matches to offer when the school couldn't be identified confidently.
     suggestions: Mapped[list] = mapped_column(JSONB, default=list)
+    # The user plans to apply here (chosen on My profile).
+    is_target: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     professors: Mapped[list["Professor"]] = relationship(back_populates="school")
 
@@ -257,6 +260,42 @@ class Outreach(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, default="sent")
     follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class Application(TimestampMixin, Base):
+    """One PhD program the user is applying to, with its deadline and a checklist of steps."""
+
+    __tablename__ = "applications"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id"))
+    program: Mapped[str] = mapped_column(String)
+    deadline: Mapped[date | None] = mapped_column(Date)
+    deadline_text: Mapped[str | None] = mapped_column(Text)  # exact wording from the program's site
+    deadline_cycle: Mapped[str | None] = mapped_column(String)  # fall2027 | previous | unknown
+    deadline_source_url: Mapped[str | None] = mapped_column(String)
+    apply_url: Mapped[str | None] = mapped_column(String)
+    requirements: Mapped[dict] = mapped_column(JSONB, default=dict)  # gre, letters, fee, english, faculty_in_app
+    # planning | in_progress | submitted | interview | admitted | waitlisted | rejected | withdrawn
+    status: Mapped[str] = mapped_column(String, default="planning")
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    school: Mapped[School] = relationship()
+    steps: Mapped[list["ApplicationStep"]] = relationship(
+        back_populates="application", cascade="all, delete-orphan", order_by="ApplicationStep.position"
+    )
+
+
+class ApplicationStep(TimestampMixin, Base):
+    __tablename__ = "application_steps"
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("applications.id", ondelete="CASCADE"))
+    label: Mapped[str] = mapped_column(String)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Own due date; if empty the step is due with the application deadline.
+    due_date: Mapped[date | None] = mapped_column(Date)
+
+    application: Mapped[Application] = relationship(back_populates="steps")
 
 
 class Job(TimestampMixin, Base):

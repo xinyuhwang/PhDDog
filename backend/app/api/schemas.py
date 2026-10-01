@@ -41,7 +41,17 @@ class SchoolOut(ORM):
     primary_domain: str | None
     confirmed: bool
     suggestions: list[dict]
+    is_target: bool
     professor_count: int = 0
+
+
+class SchoolCreateIn(BaseModel):
+    name: str
+    is_target: bool = True
+
+
+class SchoolTargetIn(BaseModel):
+    is_target: bool
 
 
 class SchoolConfirmIn(BaseModel):

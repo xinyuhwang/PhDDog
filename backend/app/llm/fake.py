@@ -294,7 +294,8 @@ class FakeLLM:
             re.I,
         )
         recruiting = re.compile(
-            r"\b(looking for|recruiting|seeking|hiring|accepting|(?:have|has|there are|there is)\s+(?:\w+\s+){0,3}(?:open positions?|openings?))\b"
+            r"\b(looking for|recruiting|recruit|seeking|hiring|hire|accepting|admit|admitting|take on|"
+            r"(?:have|has|there are|there is)\s+(?:\w+\s+){0,3}(?:open positions?|openings?))\b"
             r"[^.]{0,120}\b(ph\.?\s?d|students?|postdocs?)\b",
             re.I,
         )
@@ -314,7 +315,7 @@ class FakeLLM:
         phd = _Phd()
         general = re.compile(r"\b(every year|each year|always|frequently|regularly|from time to time)\b", re.I)
         do_not_email = re.compile(
-            r"\b(cannot|can't|can not|unable to|won't|will not|do not|don't|not able to)\s+(?:\w+\s+){0,3}(respond|reply|answer)\b"
+            r"\b(cannot|can't|can not|unable to|won't|will not|do not|don't|not able to|not be able to)\s+(?:\w+\s+){0,3}(respond|reply|answer)\b"
             r"|\b(?:please\s+)?(?:do not|don't)\s+(?:e-?mail|contact)\s+me\b", re.I
         )
         # "me", or the professor's own name ("please list Eric Eaton as a prospective advisor").
@@ -345,7 +346,7 @@ class FakeLLM:
 
                 recruit = None
                 # "Openings will be rare" says neither yes nor no.
-                hedged = re.search(r"\b(rare|limited|unlikely|few if any)\b", s, re.I)
+                hedged = re.search(r"\b(rare|unlikely|few if any)\b|(?<!not )\blimited\b(?!\s+to\b)", s, re.I)
                 if hedged or (other_roles.search(s) and not phd.search(s)):
                     pass
                 elif not_recruiting.search(s):

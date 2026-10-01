@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/add", label: "Add professors" },
   { href: "/professors", label: "Professors" },
   { href: "/outreach", label: "Outreach" },
+  { href: "/applications", label: "Applications" },
 ];
 
 export default function Nav() {

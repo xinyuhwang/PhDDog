@@ -127,6 +127,8 @@ def test_lab_contact_page_roles():
     ("We are not currently accepting additional Northeastern graduate students.", "not_recruiting"),
     ("Positions in my group have been filled for this cycle; check back next year for PhD students.", "not_recruiting"),
     ("We have two open positions for PhD students starting Fall 2027.", "explicitly_recruiting"),
+    ("We are planning to hire 2~3 PhD students (Fall 2027) who share our passion in ML & Biomedical AI.", "explicitly_recruiting"),
+    ("I am also looking for PhD students, especially in but not limited to neural representation learning.", "explicitly_recruiting"),
 ])
 def test_recruiting_phrasings(sentence, expected):
     claims = [c for c in llm.extract_profile([PageText(url="https://x.edu/~a/", text=sentence)], "Ann Lee", "x.edu").claims
@@ -145,3 +147,8 @@ def test_contacting_an_office_is_not_a_contact_policy():
 def test_hedged_openings_are_no_claim():
     page = PageText(url="https://x.edu/~a/", text="While openings in my research group will be rare, here is what I look for in PhD students.")
     assert [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "recruiting"] == []
+
+
+def test_may_not_be_able_to_respond_is_do_not_email():
+    page = PageText(url="https://x.edu/~a/", text="Due to the high volume of emails, I may not be able to respond to every message.")
+    assert [c.claim for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims] == ["do_not_email"]
