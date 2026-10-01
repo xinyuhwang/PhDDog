@@ -123,9 +123,11 @@ def scope_prefix(url: str) -> str:
     if segments[0].startswith("~"):
         return f"/{segments[0]}/"
     if "." in segments[-1]:
+        stem = segments[-1].rsplit(".", 1)[0]
         if len(segments) == 1:
-            return "/"
-        return "/" + "/".join(segments[:-1]) + "/" + segments[-1].rsplit(".", 1)[0]
+            # "/index.html" is a whole personal site; "/gevaertlab.html" on a big shared site is one page.
+            return "/" if stem.lower() in ("index", "home", "default", "main") else f"/{stem}"
+        return "/" + "/".join(segments[:-1]) + "/" + stem
     return "/" + "/".join(segments)
 
 

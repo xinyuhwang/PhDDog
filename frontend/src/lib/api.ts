@@ -85,6 +85,7 @@ export type ProfessorSummary = {
   contact_policy: string;
   last_checked_at: string | null;
   check_stale: boolean;
+  notes: string | null;
   status: string;
   screen: Screen | null;
 };
@@ -105,7 +106,6 @@ export type ProfessorDetail = ProfessorSummary & {
   contact_source_url: string | null;
   field_sources: Record<string, string>;
   user_overrides: string[];
-  notes: string | null;
   evidence: Evidence[];
   candidates: Candidate[];
   pages: { url: string; kind: string; fetch_status: string; error: string | null; fetched_at: string | null }[];

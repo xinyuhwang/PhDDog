@@ -74,6 +74,7 @@ export default function ProfessorPage() {
               )}
               <p className="text-stone-700">{prof.stated_interests ?? <span className="text-stone-400">No research interests extracted.</span>}</p>
               {prof.bio_summary && <p className="text-stone-500">{prof.bio_summary}</p>}
+              {prof.notes && <p className="rounded-md bg-indigo-50/60 px-3 py-2 text-stone-700"><span className="font-medium">Notes: </span>{prof.notes}</p>}
               {prof.user_overrides.length > 0 && <p className="text-xs text-stone-500">Edited by you (kept on re-check): {prof.user_overrides.join(", ")}</p>}
             </div>
           )}
@@ -123,7 +124,7 @@ function ResolvePanel({ prof, onChanged }: { prof: ProfessorDetail; onChanged: (
 }
 
 function EditDetails({ prof, onSaved }: { prof: ProfessorDetail; onSaved: () => void }) {
-  const fields = ["title", "department", "email", "lab_url", "stated_interests"] as const;
+  const fields = ["title", "department", "email", "lab_url", "stated_interests", "notes"] as const;
   const [form, setForm] = useState(() => Object.fromEntries(fields.map((f) => [f, prof[f] ?? ""])) as Record<(typeof fields)[number], string>);
   const [error, setError] = useState<string | null>(null);
   async function save() {
@@ -140,7 +141,7 @@ function EditDetails({ prof, onSaved }: { prof: ProfessorDetail; onSaved: () => 
       {fields.map((f) => (
         <label key={f} className="block">
           <span className="mb-1 block font-medium capitalize">{f.replace("_", " ")}</span>
-          {f === "stated_interests"
+          {f === "stated_interests" || f === "notes"
             ? <textarea className={`${inputClass} h-28`} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
             : <input className={inputClass} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />}
         </label>

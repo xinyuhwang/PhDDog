@@ -211,7 +211,7 @@ def test_user_submitted_evidence(database, monkeypatch):
     assert all(e["gone_at"] is None for e in detail["evidence"])
 
     # If the sentence is removed from the page, it moves to history on the next re-check.
-    pages[url] = "<p>Positions are filled.</p>"
+    pages[url] = "<p>Our lab studies clinical NLP.</p>"
     client.post(f"/professors/{pid}/refresh")
     run_jobs()
     detail = client.get(f"/professors/{pid}").json()

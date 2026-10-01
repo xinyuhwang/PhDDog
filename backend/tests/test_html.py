@@ -62,6 +62,8 @@ def test_scope_prefix():
     assert scope_prefix("https://x.edu/~jdoe/index.html") == "/~jdoe/"
     assert scope_prefix("https://x.edu/faculty/jane-doe/") == "/faculty/jane-doe"
     assert scope_prefix("https://x.edu/cse/profiles/doe.html") == "/cse/profiles/doe"
+    assert scope_prefix("https://med.x.edu/gevaertlab.html") == "/gevaertlab"
+    assert scope_prefix("https://jd.github.io/index.html") == "/"
 
 
 def test_directory_profile_does_not_crawl_department_pages():

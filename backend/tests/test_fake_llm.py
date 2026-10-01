@@ -121,3 +121,27 @@ def test_lab_contact_page_roles():
     ))
     claims = [(c.kind, c.claim) for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims]
     assert claims == [("recruiting", "explicitly_recruiting")]
+
+
+@pytest.mark.parametrize(("sentence", "expected"), [
+    ("We are not currently accepting additional Northeastern graduate students.", "not_recruiting"),
+    ("Positions in my group have been filled for this cycle; check back next year for PhD students.", "not_recruiting"),
+    ("We have two open positions for PhD students starting Fall 2027.", "explicitly_recruiting"),
+])
+def test_recruiting_phrasings(sentence, expected):
+    claims = [c for c in llm.extract_profile([PageText(url="https://x.edu/~a/", text=sentence)], "Ann Lee", "x.edu").claims
+              if c.kind == "recruiting"]
+    assert [c.claim for c in claims] == [expected]
+
+
+def test_contacting_an_office_is_not_a_contact_policy():
+    page = PageText(url="https://x.edu/~a/", text=(
+        "Please contact the CFAR team in the Medical Center Development Office for assistance. "
+        "Please contact me by email with your CV."))
+    claims = [c.quote for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims]
+    assert claims == ["Please contact me by email with your CV."]
+
+
+def test_hedged_openings_are_no_claim():
+    page = PageText(url="https://x.edu/~a/", text="While openings in my research group will be rare, here is what I look for in PhD students.")
+    assert [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "recruiting"] == []

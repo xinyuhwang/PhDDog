@@ -289,10 +289,13 @@ class FakeLLM:
 
     def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile, name: str = "") -> None:
         not_recruiting = re.compile(
-            r"\b(not (?:currently )?(?:recruiting|accepting|taking)(?: new)? (?:ph\.?d\.? )?students|no (?:open )?(?:positions|openings))\b", re.I
+            r"\b(?:not|no longer)\s+(?:currently\s+)?(?:recruiting|accepting|taking|looking for|admitting)\b[^.]{0,60}\b(?:students?|ph\.?\s?d)"
+            r"|\bno (?:open )?(?:positions|openings)\b|\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
+            re.I,
         )
         recruiting = re.compile(
-            r"\b(looking for|recruiting|seeking|hiring|accepting|open positions?|openings)\b[^.]{0,120}\b(ph\.?\s?d|students?|postdocs?)\b",
+            r"\b(looking for|recruiting|seeking|hiring|accepting|(?:have|has|there are|there is)\s+(?:\w+\s+){0,3}(?:open positions?|openings?))\b"
+            r"[^.]{0,120}\b(ph\.?\s?d|students?|postdocs?)\b",
             re.I,
         )
         # Recruiting statements about other roles say nothing about PhD openings.
@@ -323,7 +326,11 @@ class FakeLLM:
         apply_program = re.compile(
             r"\bapply (?:to|through|via|directly to) the\b|\bnot necessary to e-?mail\b", re.I
         )
-        welcomes = re.compile(r"\b(feel free to|please|welcome to)\s+(e-?mail|contact|reach out)\b|\be-?mail me\b", re.I)
+        welcomes = re.compile(
+            r"\b(?:feel free to|please|welcome to|encouraged to)\s+(?:e-?mail|contact|reach out to|write to)\s+(?:me|us|our lab|the lab|dr\.?\s+\w+|prof(?:essor)?\.?\s+\w+)\b"
+            r"|\bfeel free to reach out\b|\be-?mail me\b|\breach out to me\b",
+            re.I,
+        )
 
         seen: set[tuple[str, str]] = set()
         for p in pages:
@@ -337,7 +344,9 @@ class FakeLLM:
                     cycle = f"{season.title()} {year}"
 
                 recruit = None
-                if other_roles.search(s) and not phd.search(s):
+                # "Openings will be rare" says neither yes nor no.
+                hedged = re.search(r"\b(rare|limited|unlikely|few if any)\b", s, re.I)
+                if hedged or (other_roles.search(s) and not phd.search(s)):
                     pass
                 elif not_recruiting.search(s):
                     recruit = "not_recruiting"

@@ -83,6 +83,7 @@ class ProfessorSummary(ORM):
     contact_policy: str
     last_checked_at: datetime | None
     check_stale: bool = False  # last site check is older than RECHECK_AFTER_DAYS
+    notes: str | None = None
     status: str
     screen: ScreenOut | None = None
 
@@ -117,7 +118,6 @@ class ProfessorDetail(ProfessorSummary):
     contact_source_url: str | None
     field_sources: dict
     user_overrides: list[str]
-    notes: str | None
     evidence: list[EvidenceOut]
     candidates: list[CandidateOut]
     pages: list[dict]
