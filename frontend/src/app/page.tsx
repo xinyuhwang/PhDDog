@@ -3,13 +3,15 @@
 import Link from "next/link";
 
 import { Card } from "@/components/ui";
-import type { Outreach, ProfessorSummary, Profile } from "@/lib/api";
+import type { Application, Outreach, ProfessorSummary, Profile } from "@/lib/api";
 import { useApi, useShowFit } from "@/lib/hooks";
 
 export default function Dashboard() {
   const { data: profile } = useApi<Profile | null>("/profile");
   const { data: profs } = useApi<ProfessorSummary[]>("/professors");
   const { data: due } = useApi<Outreach[]>("/outreach?due=true");
+  const { data: apps } = useApi<Application[]>("/applications");
+  const upcoming = (apps ?? []).filter((a) => a.deadline && ["planning", "in_progress"].includes(a.status)).slice(0, 6);
 
   const showFit = useShowFit();
   const count = (f: (p: ProfessorSummary) => boolean) => profs?.filter(f).length ?? 0;
@@ -50,6 +52,20 @@ export default function Dashboard() {
               </li>
             ))}
           </ol>
+        </Card>
+
+        <Card title="Upcoming deadlines" actions={<Link href="/applications" className="text-sm text-indigo-600 hover:underline">Applications →</Link>}>
+          {!upcoming.length ? <p className="text-sm text-stone-500">No application deadlines yet.</p> : (
+            <ul className="divide-y divide-stone-100">
+              {upcoming.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-24 text-stone-500">{new Date(`${a.deadline}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                  <span className="flex-1">{a.school_name} <span className="text-stone-500">— {a.program}</span></span>
+                  <span className={`text-xs ${(a.days_left ?? 99) <= 14 ? "font-medium text-amber-700" : "text-stone-500"}`}>{a.days_left}d · {a.done}/{a.total}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         <Card title="Follow-ups due">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import TargetSchools from "@/components/TargetSchools";
 import { Badge, Button, Card, ErrorNote, inputClass } from "@/components/ui";
 import { api, type Profile } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
@@ -35,6 +36,8 @@ export default function ProfilePage() {
 
   const sp = profile?.structured_profile;
   return (
+    <div className="space-y-6">
+    <TargetSchools />
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="space-y-6">
         <Card title="Resume">
@@ -84,6 +87,7 @@ export default function ProfilePage() {
           </div>
         )}
       </Card>
+    </div>
     </div>
   );
 }

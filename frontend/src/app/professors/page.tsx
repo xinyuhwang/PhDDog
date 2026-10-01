@@ -31,7 +31,7 @@ export default function ProfessorsPage() {
     let list = profs.data ?? [];
     if (school) list = list.filter((p) => p.school_name === school);
     if (hideDismissed) list = list.filter((p) => p.status !== "dismissed");
-    if (query) list = list.filter((p) => `${p.name} ${p.department ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+    if (query) list = list.filter((p) => `${p.name} ${p.department ?? ""} ${p.notes ?? ""}`.toLowerCase().includes(query.toLowerCase()));
     const key = (p: ProfessorSummary) => ({
       fit: [FIT_ORDER[p.screen?.label ?? ""] ?? 3, -(p.screen?.score ?? 0)],
       recruiting: [RECRUIT_ORDER[p.recruiting_status] ?? 2, p.recruiting_stale ? 1 : 0],
@@ -68,7 +68,7 @@ export default function ProfessorsPage() {
       )}
       <div className="mb-4 empty:hidden"><ErrorNote error={screenError} /></div>
       <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
-        <input className={`${inputClass} w-56 py-1`} placeholder="Search name / dept" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className={`${inputClass} w-56 py-1`} placeholder="Search name, dept, notes" value={query} onChange={(e) => setQuery(e.target.value)} />
         <select className={`${inputClass} w-64 py-1`} value={school} onChange={(e) => setSchool(e.target.value)}>
           <option value="">All schools</option>
           {schools.map((s) => <option key={s}>{s}</option>)}
@@ -96,6 +96,7 @@ export default function ProfessorsPage() {
                   <td className="py-2.5 pr-3">
                     <Link href={`/professors/${p.id}`} className="font-medium text-stone-900 hover:text-indigo-700">{p.name}</Link>
                     <div className="text-xs text-stone-500">{[p.title, p.department, p.school_name].filter(Boolean).join(" · ")}</div>
+                    {p.notes && <div className="mt-1 max-w-md text-xs text-stone-600">{p.notes.replace(/^Why it matches \(from search\): /, "")}</div>}
                     {p.resolve_status !== "resolved" && <div className="mt-1"><ResolveBadge status={p.resolve_status} /></div>}
                   </td>
                   {showFit && (

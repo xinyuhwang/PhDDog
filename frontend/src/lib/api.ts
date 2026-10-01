@@ -85,6 +85,7 @@ export type ProfessorSummary = {
   contact_policy: string;
   last_checked_at: string | null;
   check_stale: boolean;
+  notes: string | null;
   status: string;
   screen: Screen | null;
 };
@@ -105,7 +106,6 @@ export type ProfessorDetail = ProfessorSummary & {
   contact_source_url: string | null;
   field_sources: Record<string, string>;
   user_overrides: string[];
-  notes: string | null;
   evidence: Evidence[];
   candidates: Candidate[];
   pages: { url: string; kind: string; fetch_status: string; error: string | null; fetched_at: string | null }[];
@@ -196,3 +196,59 @@ export type Outreach = {
 export type Job = { id: string; kind: string; status: string; attempts: number; error: string | null; payload: Record<string, string> };
 
 export type Health = { ok: boolean; llm_provider: string; target_cycle: string };
+
+export type SchoolSuggestion = { name: string; aliases: string[]; primary_domain: string | null; country: string | null };
+
+export type School = {
+  id: string;
+  name: string;
+  aliases: string[];
+  primary_domain: string | null;
+  confirmed: boolean;
+  suggestions: SchoolSuggestion[];
+  is_target: boolean;
+  professor_count: number;
+};
+
+export type AppStep = {
+  id: string;
+  label: string;
+  position: number;
+  done: boolean;
+  done_at: string | null;
+  due_date: string | null;
+  effective_due: string | null;
+};
+
+export type Application = {
+  id: string;
+  school_id: string;
+  school_name: string;
+  program: string;
+  deadline: string | null;
+  deadline_text: string | null;
+  deadline_cycle: string | null;
+  deadline_source_url: string | null;
+  apply_url: string | null;
+  requirements: Record<string, string>;
+  status: string;
+  notes: string | null;
+  steps: AppStep[];
+  done: number;
+  total: number;
+  remaining: number;
+  overdue: number;
+  due_soon: number;
+  days_left: number | null;
+  next_step: AppStep | null;
+  faculty: { id: string; name: string; recruiting_status: string; contact_policy: string }[];
+};
+
+export type TodoItem = {
+  step: AppStep;
+  application_id: string;
+  school_name: string;
+  program: string;
+  due: string | null;
+  days_until: number | null;
+};

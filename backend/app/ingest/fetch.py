@@ -28,6 +28,7 @@ class FetchResult:
     content_type: str
     content: bytes
     last_modified: str | None = None
+    tls_unverified: bool = False  # fetched after an incomplete-certificate-chain error (see fetch)
 
     @property
     def text(self) -> str:
@@ -38,10 +39,19 @@ class FetchBlocked(Exception):
     pass
 
 
-def _client() -> httpx.Client:
+def _client(verify: bool = True) -> httpx.Client:
     return httpx.Client(
-        follow_redirects=True, timeout=20.0, headers={"User-Agent": user_agent()}, max_redirects=5
+        follow_redirects=True, timeout=20.0, headers={"User-Agent": user_agent()}, max_redirects=5, verify=verify
     )
+
+
+def _incomplete_chain(e: Exception) -> bool:
+    """The server omitted an intermediate certificate (browsers fetch it themselves; Python doesn't).
+
+    Only this case is retried without verification. Expired, self-signed or wrong-host
+    certificates still fail.
+    """
+    return "unable to get local issuer certificate" in str(e)
 
 
 def _wait_turn(host: str) -> None:
@@ -75,13 +85,22 @@ def fetch(url: str, check_robots: bool = True) -> FetchResult:
     if check_robots and not allowed_by_robots(url):
         raise FetchBlocked(f"robots.txt disallows {url}")
     _wait_turn(urlsplit(url).netloc)
-    with _client() as c:
-        r = c.get(url)
+    unverified = False
+    try:
+        with _client() as c:
+            r = c.get(url)
+    except httpx.ConnectError as e:
+        if not _incomplete_chain(e):
+            raise
+        # Read-only fetch of a public page: acceptable to retry, but the result is flagged.
+        unverified = True
+        with _client(verify=False) as c:
+            r = c.get(url)
     r.raise_for_status()
     return FetchResult(
         url=url, final_url=str(r.url), status_code=r.status_code,
         content_type=r.headers.get("content-type", ""), content=r.content,
-        last_modified=r.headers.get("last-modified"),
+        last_modified=r.headers.get("last-modified"), tls_unverified=unverified,
     )
 
 
