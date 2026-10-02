@@ -279,6 +279,15 @@ class Application(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, default="planning")
     notes: Mapped[str | None] = mapped_column(Text)
 
+    # Assessment for choosing where to apply (Compare page). Suggested values come from Claude;
+    # assessment_by flips to "user" once the user edits any of them.
+    fit_score: Mapped[int | None] = mapped_column(Integer)  # 1–5
+    tier: Mapped[str | None] = mapped_column(String)  # reach | target | likely
+    reason: Mapped[str | None] = mapped_column(Text)  # the coherent reason to apply
+    gaps: Mapped[str | None] = mapped_column(Text)  # risks / missing preparation
+    decision: Mapped[str] = mapped_column(String, default="undecided", server_default="undecided")  # undecided | top8 | final5 | drop
+    assessment_by: Mapped[str | None] = mapped_column(String)  # claude | user
+
     school: Mapped[School] = relationship()
     steps: Mapped[list["ApplicationStep"]] = relationship(
         back_populates="application", cascade="all, delete-orphan", order_by="ApplicationStep.position"
