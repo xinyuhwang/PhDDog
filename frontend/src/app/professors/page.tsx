@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import { Button, Card, ContactBadge, ErrorNote, FitBadge, PinButton, RecruitingBadge, ResolveBadge, StageBadge, inputClass } from "@/components/ui";
 import { api, type Job, type ProfessorSummary, type Profile } from "@/lib/api";
@@ -10,8 +10,15 @@ import { useApi, useShowFit } from "@/lib/hooks";
 const FIT_ORDER: Record<string, number> = { strong: 0, possible: 1, no: 2 };
 const RECRUIT_ORDER: Record<string, number> = { explicitly_recruiting: 0, recruits_generally: 1, unknown: 2, not_recruiting: 3 };
 type SortKey = "fit" | "recruiting" | "name" | "school";
-// Later stages (analyzed, drafted, contacted…) already imply shortlisted.
-const EARLY_STAGES = ["added", "resolved", "screened", "shortlisted"];
+// Group order on the page, before the chosen sort: pinned with papers analyzed (or later) → pinned → others.
+// Unpinning keeps the stage but moves the professor to "Others".
+const GROUPS = ["Papers analyzed", "Pinned", "Others", "Dismissed"];
+const ANALYZED_OR_LATER = ["analyzed", "drafted", "contacted", "replied"];
+const groupOf = (p: ProfessorSummary) =>
+  p.status === "dismissed" ? 3 : !p.pinned ? 2 : ANALYZED_OR_LATER.includes(p.status) ? 0 : 1;
+// Match notes that call out an especially close fit rank first within each group.
+const STRONG_MATCH = /\b(closest|direct (match|overlap)|strongest|very strong|best (overall )?(\w+ )?match)\b/i;
+const strongMatch = (p: ProfessorSummary) => !!p.notes && STRONG_MATCH.test(p.notes);
 
 export default function ProfessorsPage() {
   const jobs = useApi<Job[]>("/jobs", (d) => d.some((j) => j.status !== "failed"));
@@ -32,12 +39,12 @@ export default function ProfessorsPage() {
     if (school) list = list.filter((p) => p.school_name === school);
     if (hideDismissed) list = list.filter((p) => p.status !== "dismissed");
     if (query) list = list.filter((p) => `${p.name} ${p.department ?? ""} ${p.notes ?? ""}`.toLowerCase().includes(query.toLowerCase()));
-    const key = (p: ProfessorSummary) => ({
+    const key = (p: ProfessorSummary) => [groupOf(p), strongMatch(p) ? 0 : 1, ...({
       fit: [FIT_ORDER[p.screen?.label ?? ""] ?? 3, -(p.screen?.score ?? 0)],
       recruiting: [RECRUIT_ORDER[p.recruiting_status] ?? 2, p.recruiting_stale ? 1 : 0],
       name: [p.name],
       school: [p.school_name, p.name],
-    })[sortBy];
+    })[sortBy]];
     return [...list].sort((a, b) => {
       const [ka, kb] = [key(a), key(b)];
       for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
@@ -48,8 +55,8 @@ export default function ProfessorsPage() {
   const schools = [...new Set(profs.data?.map((p) => p.school_name))].sort();
   const screening = jobs.data?.some((j) => j.kind === "screen_all" && j.status !== "failed");
 
-  async function toggleShortlist(p: ProfessorSummary) {
-    await api.patch(`/professors/${p.id}`, { status: p.status === "shortlisted" ? "screened" : "shortlisted" });
+  async function togglePin(p: ProfessorSummary) {
+    await api.patch(`/professors/${p.id}`, { pinned: !p.pinned });
     profs.reload();
   }
 
@@ -91,12 +98,25 @@ export default function ProfessorsPage() {
               <tr><th className="py-2">Professor</th>{showFit && <th>Research fit</th>}<th>Recruiting</th><th>Contact</th><th title="Where they are in your outreach">Stage</th><th /></tr>
             </thead>
             <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className={`border-t border-stone-100 align-top ${p.status === "dismissed" ? "opacity-50" : ""}`}>
+              {rows.map((p, i) => (
+                <Fragment key={p.id}>
+                {(i === 0 || groupOf(rows[i - 1]) !== groupOf(p)) && (
+                  <tr className="border-t border-stone-200 bg-stone-50">
+                    <td colSpan={showFit ? 6 : 5} className="px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      {GROUPS[groupOf(p)]} ({rows.filter((r) => groupOf(r) === groupOf(p)).length})
+                    </td>
+                  </tr>
+                )}
+                <tr className={`border-t border-stone-100 align-top ${p.status === "dismissed" ? "opacity-50" : ""}`}>
                   <td className="py-2.5 pr-3">
                     <Link href={`/professors/${p.id}`} className="font-medium text-stone-900 hover:text-indigo-700">{p.name}</Link>
                     <div className="text-xs text-stone-500">{[p.title, p.department, p.school_name].filter(Boolean).join(" · ")}</div>
-                    {p.notes && <div className="mt-1 max-w-md text-xs text-stone-600">{p.notes.replace(/^Why it matches \(from search\): /, "")}</div>}
+                    {p.notes && (
+                      <div className={`mt-1 max-w-md text-xs ${strongMatch(p) ? "font-medium text-indigo-800" : "text-stone-600"}`}>
+                        {strongMatch(p) && <span title="Especially close match">★ </span>}
+                        {p.notes.replace(/^Why it matches \(from search\): /, "")}
+                      </div>
+                    )}
                     {p.resolve_status !== "resolved" && <div className="mt-1"><ResolveBadge status={p.resolve_status} /></div>}
                   </td>
                   {showFit && (
@@ -114,17 +134,19 @@ export default function ProfessorsPage() {
                   <td className="pr-3"><StageBadge status={p.status} /></td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      {EARLY_STAGES.includes(p.status) && (
-                        <PinButton pinned={p.status === "shortlisted"} onClick={() => toggleShortlist(p)} />
-                      )}
                       {p.status !== "dismissed" && (
-                        <Link href={`/professors/${p.id}#papers`} className="text-sm font-medium text-indigo-600 hover:underline">
-                          {["shortlisted", "added", "resolved", "screened"].includes(p.status) ? "Add papers →" : "Open →"}
-                        </Link>
+                        <>
+                          <PinButton pinned={p.pinned} onClick={() => togglePin(p)} />
+                          <Link href={`/professors/${p.id}#papers`} title="Add a paper"
+                            className="rounded-md px-2 py-0.5 text-sm font-medium text-indigo-600 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-50">
+                            + paper
+                          </Link>
+                        </>
                       )}
                     </div>
                   </td>
                 </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

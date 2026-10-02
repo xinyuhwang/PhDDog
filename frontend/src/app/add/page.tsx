@@ -22,6 +22,7 @@ const ISSUE_TEXT: Record<string, string> = {
   missing_school: "No school — add one",
   unclear_name: "Name unclear",
   duplicate: "Already added",
+  scholar_link: "Scholar link kept as reference — add homepage",
 };
 
 export default function AddPage() {
@@ -46,7 +47,10 @@ export default function AddPage() {
       if (j !== i) return e;
       const next = { ...e, [field]: value || null };
       // Editing clears the issue it fixes; duplicates stay flagged.
-      next.issues = e.issues.filter((iss) => !((iss === "missing_school" && next.school_raw) || (iss === "unclear_name" && next.name)));
+      const scholar = /^https?:\/\/scholar\.google\./i.test(next.url ?? "");
+      next.issues = e.issues.filter((iss) => !((iss === "missing_school" && next.school_raw) || (iss === "unclear_name" && next.name)
+        || (iss === "scholar_link" && !scholar)));
+      if (scholar && !next.issues.includes("scholar_link")) next.issues = [...next.issues, "scholar_link"];
       return next;
     }));
   }
@@ -99,7 +103,7 @@ export default function AddPage() {
                         </td>
                       ))}
                       <td className="py-2">
-                        {e.issues.length ? e.issues.map((iss) => <Badge key={iss} tone={iss === "duplicate" ? "gray" : "red"}>{ISSUE_TEXT[iss] ?? iss}</Badge>) : <Badge tone="green">Ready</Badge>}
+                        {e.issues.length ? e.issues.map((iss) => <Badge key={iss} tone={iss === "duplicate" ? "gray" : iss === "scholar_link" ? "yellow" : "red"}>{ISSUE_TEXT[iss] ?? iss}</Badge>) : <Badge tone="green">Ready</Badge>}
                       </td>
                     </tr>
                   ))}

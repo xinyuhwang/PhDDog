@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const { data: profile, setData } = useApi<Profile | null>("/profile");
   const [statement, setStatement] = useState("");
   const [keywords, setKeywords] = useState("");
+  const [projectNotes, setProjectNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,6 +20,7 @@ export default function ProfilePage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync form with loaded profile
       setStatement(profile.research_statement ?? "");
       setKeywords(profile.keywords.join(", "));
+      setProjectNotes(profile.project_notes ?? "");
     }
   }, [profile]);
 
@@ -56,9 +58,17 @@ export default function ProfilePage() {
           <label className="mb-1 mt-4 block text-sm font-medium">Keywords (comma-separated)</label>
           <input className={inputClass} value={keywords} onChange={(e) => setKeywords(e.target.value)}
             placeholder="health AI, medical imaging, EHR, drug discovery" />
+          <label className="mb-1 mt-4 block text-sm font-medium">Private project notes</label>
+          <p className="mb-1 text-xs text-stone-500">
+            Details of ongoing or unpublished work. Stored only on this machine and used as quotable evidence for paper connection
+            points. Emails should mention this work only in general terms.
+          </p>
+          <textarea className={`${inputClass} h-40 font-mono text-xs`} value={projectNotes} onChange={(e) => setProjectNotes(e.target.value)}
+            placeholder="e.g. what you adopted from a paper, and what changed in your results" />
           <div className="mt-4 flex items-center gap-3">
             <Button disabled={busy} onClick={() => run(() => api.put<Profile>("/profile", {
               research_statement: statement, keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+              project_notes: projectNotes,
             }))}>Save</Button>
             {profile && <span className="text-xs text-stone-500">Version {profile.version} · changes create a new version; re-run screening after</span>}
           </div>

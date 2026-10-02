@@ -26,6 +26,7 @@ def _new_version(db: Session, user: User, **changes) -> UserProfile:
         "resume_file_path": current.resume_file_path if current else None,
         "resume_text": current.resume_text if current else None,
         "research_statement": current.research_statement if current else None,
+        "project_notes": current.project_notes if current else None,
         "keywords": current.keywords if current else [],
     } | changes
     if current:
@@ -49,5 +50,10 @@ def upload_resume(db: Session, user: User, content: bytes, filename: str) -> Use
     return _new_version(db, user, resume_file_path=path, resume_text=text)
 
 
-def update_profile(db: Session, user: User, research_statement: str | None, keywords: list[str]) -> UserProfile:
-    return _new_version(db, user, research_statement=research_statement, keywords=keywords)
+def update_profile(
+    db: Session, user: User, research_statement: str | None, keywords: list[str], project_notes: str | None = None,
+) -> UserProfile:
+    changes = {"research_statement": research_statement, "keywords": keywords}
+    if project_notes is not None:
+        changes["project_notes"] = project_notes
+    return _new_version(db, user, **changes)

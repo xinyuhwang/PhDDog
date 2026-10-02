@@ -94,7 +94,9 @@ def ingest_paper_url(db: Session, payload: dict) -> None:
 def summarize_paper(db: Session, payload: dict) -> None:
     paper = db.get(Paper, uuid.UUID(payload["paper_id"]))
     text = paper.full_text or paper.abstract or ""
-    paper.summary = get_llm().summarize_paper(paper.title, text).model_dump()
+    llm = get_llm()
+    paper.summary = llm.summarize_paper(paper.title, text).model_dump()
+    paper.summary_by = llm.name
 
 
 # --- analysis ----------------------------------------------------------------------------
@@ -115,14 +117,55 @@ def find_connections(db: Session, payload: dict) -> None:
     papers = [p for p in prof.papers if p.summary]
     if not papers:
         raise ValueError("No summarized papers yet")
-    results = get_llm().find_connections(
+    llm = get_llm()
+    results = llm.find_connections(
         [(p.title or "", p.full_text or p.abstract or "", PaperSummary.model_validate(p.summary)) for p in papers],
         structured(profile), profile.resume_text or "",
     )
     db.execute(delete(ConnectionPoint).where(ConnectionPoint.professor_id == prof.id))
     for i, c in results:
         db.add(ConnectionPoint(
-            professor_id=prof.id, paper_id=papers[i].id, profile_version=profile.version, **c.model_dump(),
+            professor_id=prof.id, paper_id=papers[i].id, profile_version=profile.version, analyzed_by=llm.name,
+            **c.model_dump(),
         ))
     if prof.status in ("added", "resolved", "screened", "shortlisted"):
         prof.status = "analyzed"
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
+
+
+def import_analysis(db: Session, user: User, paper: Paper, summary: PaperSummary, connections: list, analyzed_by: str) -> None:
+    """Store an analysis written outside the app's own pipeline (e.g. by Claude in a session).
+
+    Same grounding rule as everything else: each connection must quote the paper and the
+    user's resume word for word. Raises ValueError listing any quote that isn't found.
+    """
+    profile = active_profile(db, user)
+    if profile is None:
+        raise ValueError("Upload a resume first")
+    paper_text = _squash(paper.full_text or paper.abstract or "")
+    # Your side of a connection may quote the resume, research statement or private project notes.
+    resume_text = _squash(" \n ".join(t for t in (profile.resume_text, profile.research_statement, profile.project_notes) if t))
+    problems = []
+    for i, c in enumerate(connections, 1):
+        if len(_squash(c.paper_evidence)) < 15 or _squash(c.paper_evidence) not in paper_text:
+            problems.append(f"#{i} paper quote not found: {c.paper_evidence[:60]!r}")
+        if len(_squash(c.user_evidence)) < 15 or _squash(c.user_evidence) not in resume_text:
+            problems.append(f"#{i} quote of your materials not found: {c.user_evidence[:60]!r}")
+    if problems:
+        raise ValueError("; ".join(problems))
+
+    paper.summary, paper.summary_by = summary.model_dump(), analyzed_by
+    # Replace this paper's earlier connection points (e.g. rule-based placeholders).
+    db.execute(delete(ConnectionPoint).where(ConnectionPoint.paper_id == paper.id))
+    for c in connections:
+        db.add(ConnectionPoint(
+            professor_id=paper.professor_id, paper_id=paper.id, profile_version=profile.version,
+            analyzed_by=analyzed_by, **c.model_dump(),
+        ))
+    prof = db.get(Professor, paper.professor_id)
+    if prof.status in ("added", "resolved", "screened", "shortlisted"):
+        prof.status = "analyzed"
+    db.commit()

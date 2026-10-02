@@ -3,6 +3,13 @@
 import { useState } from "react";
 
 import { Badge, Button, Card, ErrorNote, inputClass, Quote } from "@/components/ui";
+
+/** Who produced an analysis: the offline rules are labeled as placeholders. */
+function ByBadge({ by }: { by: string | null }) {
+  if (!by) return null;
+  if (by === "fake") return <Badge title="Keyword placeholder from offline mode">rule-based placeholder</Badge>;
+  return <Badge tone="green" title={by}>Analyzed by {by.startsWith("claude") ? "Claude" : by}</Badge>;
+}
 import { api, type ConnectionPoint, type Paper } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
@@ -70,6 +77,7 @@ export default function PapersPanel({ professorId, onJob, busy }: { professorId:
                   {p.year && <Badge tone={p.year_warning ? "yellow" : "gray"} title={p.year_warning ? "Older than your paper window" : ""}>{p.year}{p.year_warning ? " · older" : ""}</Badge>}
                   {p.venue && <Badge>{p.venue}</Badge>}
                   {p.text_status !== "pending" && p.text_status !== "failed" && !p.summary && <Badge tone="blue">Summarizing…</Badge>}
+                  {p.summary && <ByBadge by={p.summary_by} />}
                 </div>
                 {p.error && <p className="mt-1 text-xs text-stone-500">{p.error}</p>}
                 {open === p.id && p.summary && (
@@ -104,7 +112,7 @@ export default function PapersPanel({ professorId, onJob, busy }: { professorId:
                     <input type="checkbox" className="mt-1" checked={c.selected}
                       onChange={(e) => act(() => api.patch(`/connections/${c.id}`, { selected: e.target.checked }))} />
                     <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{KIND_LABEL[c.kind]}</Badge><span className="text-xs text-stone-500">{c.paper_title}</span></div>
+                      <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{KIND_LABEL[c.kind]}</Badge><ByBadge by={c.analyzed_by} /><span className="text-xs text-stone-500">{c.paper_title}</span></div>
                       <p>{c.explanation}</p>
                       <div className="text-xs text-stone-500">Their paper:</div><Quote text={c.paper_evidence} />
                       <div className="text-xs text-stone-500">Your resume:</div><Quote text={c.user_evidence} />

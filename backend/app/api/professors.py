@@ -88,6 +88,11 @@ def patch(professor_id: uuid.UUID, body: ProfessorPatch, db: DB, user: CurrentUs
     changes = body.model_dump(exclude_unset=True)
     for field, value in changes.items():
         setattr(prof, field, value)
+    # Pinning an early-stage professor also moves the stage; later stages keep theirs.
+    if "pinned" in changes and "status" not in changes and prof.status in ("added", "resolved", "screened", "shortlisted"):
+        prof.status = "shortlisted" if prof.pinned else "screened"
+    if changes.get("status") == "shortlisted":
+        prof.pinned = True
     edited = [f for f in changes if f in EDITABLE_EXTRACTED]
     if edited:
         prof.user_overrides = sorted(set(prof.user_overrides) | set(edited))
@@ -105,7 +110,10 @@ def delete(professor_id: uuid.UUID, db: DB, user: CurrentUser):
 
 @router.post("/{professor_id}/homepage", status_code=202)
 def set_homepage(professor_id: uuid.UUID, body: HomepageIn, db: DB, user: CurrentUser):
-    svc.set_homepage(db, get_professor(db, user, professor_id), body.url.strip())
+    try:
+        svc.set_homepage(db, get_professor(db, user, professor_id), body.url.strip())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     return {"queued": True}
 
 

@@ -304,3 +304,45 @@ def test_evidence_kept_when_linking_page_fails(database, monkeypatch):
     detail = client.get(f"/professors/{prof['id']}").json()
     assert detail["recruiting_status"] == "explicitly_recruiting"
     assert all(e["gone_at"] is None for e in detail["evidence"])
+
+
+def test_import_analysis_requires_real_quotes(client):
+    r = client.post("/profile/resume", files={"file": ("cv.pdf", make_pdf(RESUME), "application/pdf")})
+    assert r.status_code == 200
+    [prof] = client.post("/professors/bulk", json={"entries": [{"raw": "z", "name": "Zed Paper", "school_raw": "UPenn"}]}).json()
+    paper = client.post(f"/professors/{prof['id']}/papers/pdf", files={"file": ("p.pdf", make_pdf(PAPER), "application/pdf")}).json()
+    run_jobs()
+    good = {"kind": "method_overlap", "paper_evidence": "machine learning methods for drug discovery",
+            "user_evidence": "Applied machine learning to drug discovery using molecular graphs.", "explanation": "Same problem."}
+    bad = {**good, "paper_evidence": "We cure all diseases with one model."}
+
+    r = client.put(f"/papers/{paper['id']}/analysis", json={"summary": {"problem": "P"}, "connections": [good, bad]})
+    assert r.status_code == 400 and "paper quote not found" in r.json()["detail"]
+
+    r = client.put(f"/papers/{paper['id']}/analysis", json={"summary": {"problem": "P"}, "connections": [good]})
+    assert r.status_code == 200 and r.json()["summary_by"] == "claude-session"
+    [c] = client.get(f"/professors/{prof['id']}/connections").json()
+    assert c["analyzed_by"] == "claude-session" and c["explanation"] == "Same problem."
+
+
+def test_pin_is_independent_of_stage(client):
+    [prof] = client.post("/professors/bulk", json={"entries": [{"raw": "p", "name": "Pin Test", "school_raw": "UPenn"}]}).json()
+    pid = prof["id"]
+    r = client.patch(f"/professors/{pid}", json={"pinned": True}).json()
+    assert r["pinned"] and r["status"] == "shortlisted"  # early stage moves to Pinned
+    client.patch(f"/professors/{pid}", json={"status": "analyzed"})
+    r = client.patch(f"/professors/{pid}", json={"pinned": False}).json()
+    assert not r["pinned"] and r["status"] == "analyzed"  # later stage is kept when unpinning
+
+
+def test_scholar_link_is_a_reference_not_a_homepage(client):
+    url = "https://scholar.google.com/citations?user=HwO7L5sAAAAJ"
+    [entry] = client.post("/professors/parse", json={"text": f"Sam Scholar (UPenn): {url}"}).json()
+    assert "scholar_link" in entry["issues"]
+    [prof] = client.post("/professors/bulk", json={"entries": [entry]}).json()
+    run_jobs()
+    p = client.get(f"/professors/{prof['id']}").json()
+    assert p["scholar_url"] == url and p["homepage_url"] is None and p["candidates"] == []
+    assert p["resolve_status"] == "not_found" and "Google Scholar" in p["resolve_error"]
+    r = client.post(f"/professors/{prof['id']}/homepage", json={"url": url})
+    assert r.status_code == 400 and "Google Scholar" in r.json()["detail"]
