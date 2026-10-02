@@ -38,3 +38,21 @@ def test_application_tracker(database):
 
     client.patch(f"/schools/{school['id']}/target", json={"is_target": False})
     assert not next(s for s in client.get("/schools").json() if s["id"] == school["id"])["is_target"]
+
+
+def test_compare(database):
+    from app.main import app
+
+    client = TestClient(app)
+    school = client.post("/schools", json={"name": "Tufts University"}).json()
+    a = client.post("/applications", json={"school_id": school["id"], "program": "Computer Science PhD"}).json()
+    client.post("/professors/bulk", json={"entries": [
+        {"raw": "x", "name": "Pat Kim", "school_raw": "Tufts University", "department_raw": "Computer Science"}]})
+    [row] = [r for r in client.get("/compare").json() if r["id"] == a["id"]]
+    assert row["program_type"] == "Computer Science" and row["n_faculty"] == 1 and row["n_in_program"] == 1
+    assert row["decision"] == "undecided" and row["assessment_by"] is None
+
+    r = client.patch(f"/applications/{a['id']}", json={"fit_score": 4, "tier": "target", "decision": "top8"}).json()
+    [row] = [x for x in client.get("/compare").json() if x["id"] == a["id"]]
+    assert (row["fit_score"], row["tier"], row["decision"], row["assessment_by"]) == (4, "target", "top8", "user")
+    assert client.patch(f"/applications/{a['id']}", json={"fit_score": 9}).status_code == 400
