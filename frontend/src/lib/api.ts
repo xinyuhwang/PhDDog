@@ -52,6 +52,7 @@ export type Profile = {
   resume_file_path: string | null;
   resume_text: string | null;
   research_statement: string | null;
+  project_notes: string | null;
   keywords: string[];
   structured_profile: StructuredProfile | null;
   created_at: string;
@@ -86,6 +87,7 @@ export type ProfessorSummary = {
   last_checked_at: string | null;
   check_stale: boolean;
   notes: string | null;
+  pinned: boolean;
   status: string;
   screen: Screen | null;
 };
@@ -150,6 +152,7 @@ export type Paper = {
   text_status: "pending" | "full" | "abstract_only" | "failed";
   error: string | null;
   summary: PaperSummary | null;
+  summary_by: string | null;
   text_chars: number;
   year_warning: boolean;
   created_at: string;
@@ -164,6 +167,7 @@ export type ConnectionPoint = {
   user_evidence: string;
   explanation: string;
   selected: boolean;
+  analyzed_by: string | null;
 };
 
 export type Draft = {

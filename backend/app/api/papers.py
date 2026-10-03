@@ -1,11 +1,13 @@
 import uuid
 
 from fastapi import APIRouter, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUser, get_professor
 from app.api.schemas import ConnectionPointOut, ConnectionSelectIn, PaperOut, PaperUrlIn
 from app.db.models import ConnectionPoint, Paper, Professor
+from app.llm.schemas import ConnectionOut, PaperSummary
 from app.services import papers as svc
 
 router = APIRouter(tags=["papers"])
@@ -45,6 +47,27 @@ def delete_paper(paper_id: uuid.UUID, db: DB, user: CurrentUser):
     get_professor(db, user, paper.professor_id)
     db.delete(paper)
     db.commit()
+
+
+class AnalysisIn(BaseModel):
+    summary: PaperSummary
+    connections: list[ConnectionOut]
+    analyzed_by: str = "claude-session"
+
+
+@router.put("/papers/{paper_id}/analysis", response_model=PaperOut)
+def put_analysis(paper_id: uuid.UUID, body: AnalysisIn, db: DB, user: CurrentUser):
+    """Store a summary + connection points written outside the pipeline. Quotes are verified."""
+    paper = db.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(404)
+    get_professor(db, user, paper.professor_id)
+    try:
+        svc.import_analysis(db, user, paper, body.summary, body.connections, body.analyzed_by)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    db.refresh(paper)
+    return _paper_out(paper)
 
 
 @router.post("/professors/{professor_id}/analyze", status_code=202)

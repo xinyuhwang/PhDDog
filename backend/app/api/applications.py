@@ -316,7 +316,7 @@ def compare(db: DB, user: CurrentUser):
                 id=p.id, name=p.name, department=p.department_raw or p.department, recruiting_status=p.recruiting_status,
                 recruiting_cycle=p.recruiting_cycle, recruiting_confidence=p.recruiting_confidence,
                 recruiting_stale=p.recruiting_stale, contact_policy=p.contact_policy,
-                pinned=p.status in ("shortlisted", "analyzed", "drafted", "contacted", "replied"),
+                pinned=p.pinned,
                 in_program=bool(hint and re.search(hint, dept, re.I)),
                 note=(p.notes or "").removeprefix("Why it matches (from search): ") or None,
             ))

@@ -9,7 +9,8 @@ analyzes the papers you choose, drafts outreach emails based on concrete
 connections, and keeps a record of everyone you've contacted.
 
 > **Status:** MVP scaffold. All four stages work end to end in offline mode; the Claude
-> integration is next. See [docs/DESIGN.md](docs/DESIGN.md) for the full design.
+> integration is next. See [docs/DESIGN.md](docs/DESIGN.md) for the design and
+> [docs/DECISIONS.md](docs/DECISIONS.md) for why it works the way it does.
 
 ---
 
@@ -62,9 +63,9 @@ personal site       your resume       connection points    follow-ups
 | Backend | FastAPI (Python 3.12), SQLAlchemy, Alembic |
 | Database | PostgreSQL 16 + pgvector |
 | Parsing | httpx, Playwright (fallback), trafilatura, PyMuPDF |
-| Web search | Claude's web search tool, used only to find homepages |
+| Web search | Planned (Claude web search or Brave), only to find homepages; offline you paste URLs |
 | Paper metadata | Crossref, arXiv, PubMed/PMC, Unpaywall |
-| LLM | Claude (`claude-opus-5-5`) via the Anthropic Python SDK |
+| LLM | Pluggable: offline rules (default), Ollama (local), Claude (planned) |
 | Dev environment | Docker Compose |
 
 ## Project structure (planned)

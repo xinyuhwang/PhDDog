@@ -50,8 +50,8 @@ export default function ProfessorPage() {
         <div className="flex flex-wrap items-center gap-2">
           <ResolveBadge status={prof.resolve_status} />
           <StageBadge status={prof.status} />
-          {["added", "resolved", "screened", "shortlisted"].includes(prof.status) && (
-            <PinButton pinned={prof.status === "shortlisted"} onClick={() => setStatus(prof.status === "shortlisted" ? "screened" : "shortlisted")} />
+          {prof.status !== "dismissed" && (
+            <PinButton pinned={prof.pinned} onClick={async () => { await api.patch(`/professors/${id}`, { pinned: !prof.pinned }); reload(); }} />
           )}
           {prof.status !== "dismissed"
             ? <Button variant="secondary" onClick={() => setStatus("dismissed")}>Dismiss</Button>

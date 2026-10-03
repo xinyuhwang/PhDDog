@@ -35,6 +35,14 @@ def normalize_name(name: str) -> str:
 # --- parse + add -------------------------------------------------------------------
 
 
+SCHOLAR_HOST = re.compile(r"^https?://scholar\.google\.", re.I)
+SCHOLAR_MESSAGE = "Google Scholar can't be read automatically. It's saved as a reference — paste their homepage or lab site."
+
+
+def is_scholar(url: str | None) -> bool:
+    return bool(url and SCHOLAR_HOST.match(url.strip()))
+
+
 def parse_input(db: Session, user: User, text: str) -> list[ParsedEntry]:
     aliases = known_aliases(db, user)
     entries = get_llm().parse_professor_input(text, aliases)
@@ -49,6 +57,8 @@ def parse_input(db: Session, user: User, text: str) -> list[ParsedEntry]:
             )
             if exists:
                 e.issues.append("duplicate")
+        if is_scholar(e.url):
+            e.issues.append("scholar_link")  # informational: kept as a reference, not used as the homepage
     return entries
 
 
@@ -61,14 +71,16 @@ def add_professors(db: Session, user: User, entries: list[ParsedEntry]) -> list[
         norm = normalize_name(e.name)
         if db.scalar(select(Professor).where(Professor.school_id == school.id, Professor.normalized_name == norm)):
             continue
+        scholar = e.url if is_scholar(e.url) else None
+        homepage = None if scholar else e.url
         prof = Professor(
             school_id=school.id, name=e.name, normalized_name=norm, input_raw=e.raw,
-            department_raw=e.department_raw, department=e.department_raw, homepage_url=e.url,
+            department_raw=e.department_raw, department=e.department_raw, homepage_url=homepage, scholar_url=scholar,
         )
         db.add(prof)
         db.flush()
-        if e.url:
-            db.add(HomepageCandidate(professor_id=prof.id, url=e.url, source="user", rank=0))
+        if homepage:
+            db.add(HomepageCandidate(professor_id=prof.id, url=homepage, source="user", rank=0))
         enqueue(db, "resolve_professor", professor_id=prof.id)
         added.append(prof)
     db.commit()
@@ -76,6 +88,8 @@ def add_professors(db: Session, user: User, entries: list[ParsedEntry]) -> list[
 
 
 def set_homepage(db: Session, prof: Professor, url: str) -> None:
+    if is_scholar(url):
+        raise ValueError(SCHOLAR_MESSAGE)
     for c in prof.candidates:
         c.chosen = c.url == url
     if not any(c.url == url for c in prof.candidates):
@@ -180,7 +194,7 @@ def resolve_professor(db: Session, payload: dict) -> None:
 
     if not prof.candidates:
         prof.resolve_status = "not_found"
-        prof.resolve_error = "No homepage found. Paste the professor's homepage URL."
+        prof.resolve_error = SCHOLAR_MESSAGE if prof.scholar_url else "No homepage found. Paste the professor's homepage URL."
         return
 
     best: tuple[float, HomepageCandidate, FetchResult] | None = None

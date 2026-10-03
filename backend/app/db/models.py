@@ -48,6 +48,9 @@ class UserProfile(TimestampMixin, Base):
     resume_file_path: Mapped[str | None] = mapped_column(String)
     resume_text: Mapped[str | None] = mapped_column(Text)
     research_statement: Mapped[str | None] = mapped_column(Text)
+    # Private project details (e.g. unpublished work). Used only as quotable evidence for
+    # connection points; never put into generated emails verbatim.
+    project_notes: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[list] = mapped_column(JSONB, default=list)
     structured_profile: Mapped[dict | None] = mapped_column(JSONB)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -111,6 +114,8 @@ class Professor(TimestampMixin, Base):
     user_overrides: Mapped[list] = mapped_column(JSONB, default=list)  # field names the user edited
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Pinned by the user (📌). Independent of the stage, so an analyzed or contacted professor can be unpinned.
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # added | resolved | screened | shortlisted | analyzed | drafted | contacted
     # | replied | closed | dismissed
     status: Mapped[str] = mapped_column(String, default="added")
@@ -219,6 +224,7 @@ class Paper(TimestampMixin, Base):
     text_status: Mapped[str] = mapped_column(String, default="pending")
     error: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[dict | None] = mapped_column(JSONB)
+    summary_by: Mapped[str | None] = mapped_column(String)  # extractor name: fake | claude-session | …
 
     professor: Mapped[Professor] = relationship(back_populates="papers")
 
@@ -233,6 +239,7 @@ class ConnectionPoint(TimestampMixin, Base):
     user_evidence: Mapped[str] = mapped_column(Text)
     explanation: Mapped[str] = mapped_column(Text)
     selected: Mapped[bool] = mapped_column(Boolean, default=False)
+    analyzed_by: Mapped[str | None] = mapped_column(String)  # fake | claude-session | …
 
 
 class EmailDraft(TimestampMixin, Base):

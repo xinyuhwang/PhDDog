@@ -14,7 +14,9 @@ def get_profile(db: DB, user: CurrentUser):
 
 @router.put("", response_model=ProfileOut)
 def put_profile(body: ProfileIn, db: DB, user: CurrentUser):
-    return svc.update_profile(db, user, body.research_statement, [k.strip() for k in body.keywords if k.strip()])
+    return svc.update_profile(
+        db, user, body.research_statement, [k.strip() for k in body.keywords if k.strip()], body.project_notes,
+    )
 
 
 @router.post("/resume", response_model=ProfileOut)

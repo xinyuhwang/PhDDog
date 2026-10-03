@@ -1,11 +1,15 @@
 # PhDDog — Design Document
 
-**Status:** Draft v0.2 · **Last updated:** 2026-09-29 · **Owner:** Xinyu Wang
+**Status:** v0.3 · **Last updated:** 2026-10-02 · **Owner:** Xinyu Wang
 
-> v0.2: Stage ① changed from "scrape faculty listing pages" to **"user types
-> professor + school in free-form text; the app finds and reads each
-> professor's personal site"**. Recruiting status and contact policy are now
-> extracted in the same step.
+> **Why things are the way they are:** see the decision log,
+> [DECISIONS.md](DECISIONS.md) (entries D1–D22, referenced below).
+>
+> v0.3: recruiting evidence with history and computed confidence (§4.1
+> Step 5); crawler rules learned from real pages; offline-first providers
+> (§7); application tracker (§4.7) and program comparison (§4.6).
+> v0.2: professors are added by typing name + school instead of scraping
+> faculty listings.
 
 ---
 
@@ -42,6 +46,8 @@ find personal site  user resume       → connection points  status
 - Generate an editable outreach email that cites the connections found.
 - Keep an outreach log: who was contacted, when, the final email text,
   status, follow-up date and notes.
+- Help choose where to apply: compare programs side by side (§4.6) and track
+  each application's deadline and checklist (§4.7).
 
 ### 1.2 Non-goals (MVP)
 
@@ -51,7 +57,8 @@ find personal site  user resume       → connection points  status
 - Sending email from the app (the user sends from their own inbox).
 - User accounts and login. The app has one local user, but the data model
   supports multiple users.
-- Admissions data, deadlines or application tracking beyond outreach.
+- Getting past sites that block automated reading (403s, bot challenges).
+  The user checks those pages and can add evidence by hand (D12, D13).
 
 ### 1.3 Design principles
 
@@ -89,6 +96,12 @@ find personal site  user resume       → connection points  status
 7. **Log outreach.** The user sends the email from their own inbox and
    clicks "Mark as sent". Status, follow-up date and notes are tracked from
    then on.
+8. **Choose programs.** On **Compare**, the user narrows target programs to
+   a Top 8 and a Final 5 using computed faculty and recruiting facts plus
+   suggested fit and tier (§4.6).
+9. **Track applications.** On **Applications**, each program has its
+   deadline, apply link, requirements and an 11-step checklist; "Do next"
+   lists the most urgent steps (§4.7).
 
 ---
 
@@ -101,7 +114,6 @@ find personal site  user resume       → connection points  status
 └────────────────────┘                     │  api/        HTTP routes     │
                                            │  services/   stage logic     │
                                            │  ingest/     fetch + extract │
-                                           │  search/     web search adpt │
                                            │  llm/        provider adapter│
                                            │  storage/    file adapter    │
                                            │  worker      background jobs │
@@ -112,7 +124,7 @@ find personal site  user resume       → connection points  status
                                    │ pgvector         │   │ ./data (local) │
                                    └──────────────────┘   │ → S3 later     │
                                                           └────────────────┘
-External: Claude API (+ web search tool) · Crossref · arXiv · PubMed/PMC · Unpaywall · Semantic Scholar
+External: OpenAlex (schools) · Crossref · arXiv · PubMed/PMC · Unpaywall · optional: Ollama (local), Claude API
 ```
 
 ### 3.1 Technology choices
@@ -124,11 +136,11 @@ External: Claude API (+ web search tool) · Crossref · arXiv · PubMed/PMC · U
 | DB | Postgres 16 + pgvector | Regular data and embeddings in one database, no migration later |
 | ORM / migrations | SQLAlchemy 2 + Alembic | Standard choice |
 | Background jobs | Simple DB-backed job table + worker process (MVP); Celery/RQ later | Homepage resolution and paper analysis take too long to run inside a web request |
-| Web search | `search/` adapter; default = Claude's server-side web search tool, Brave Search API as an alternative | Used only to find a professor's homepage. Google's Custom Search JSON API is closed to new customers and shuts down 2027-01-01, and scraping Google isn't allowed |
+| Web search | Behind the LLM adapter's `find_homepage`; planned: Claude's web search tool or Brave Search. Offline: pasted URLs or URLs from research agents (D14, D17) | Used only to find a professor's homepage. Google's Custom Search JSON API is closed to new customers and shuts down 2027-01-01, and scraping Google isn't allowed |
 | HTML fetching | `httpx`; Playwright fallback for pages that need JavaScript | Most faculty pages are plain HTML |
 | HTML → text | `trafilatura` / `selectolax` | Pulls the main content out of a page |
 | PDF → text | PyMuPDF (MVP); GROBID (upgrade) | PyMuPDF is fast; GROBID splits papers into sections |
-| LLM | **Claude** (`claude-opus-5-5`) via the `anthropic` Python SDK, behind an `llm/` adapter | Used for parsing, extraction, screening, analysis and writing (§7) |
+| LLM | `llm/` adapter with three providers: `fake` (rule-based, **default**), `ollama` (local extraction), `claude` (planned) | §7; D5–D7 |
 | Embeddings | None in MVP; local `sentence-transformers` later (§7) | pgvector columns reserved |
 | Local dev | Docker Compose | One command runs everything |
 
@@ -185,7 +197,7 @@ The LLM reads the text and returns one record per entry:
 #### Step 3: Find the homepage (background job)
 
 1. **URL given in the entry:** use it directly and skip to verification.
-2. **Otherwise search** through the `search/` adapter with targeted queries:
+2. **Otherwise search** (planned provider: Claude web search or Brave, D14; offline mode skips this step) with targeted queries:
    - `"{name}" {school} homepage`
    - `"{name}" {department} site:{primary_domain}`
    - `"{name}" {school} lab`
@@ -209,21 +221,32 @@ The LLM reads the text and returns one record per entry:
 
 #### Step 4: Read the site and extract details
 
-1. Crawl the homepage plus up to 8 pages on the same site whose link text
-   or path matches `research|publications|people|members|join|prospective|
-   openings|students|cv|bio|contact`. Save the raw HTML for each
-   (`source_pages`).
-2. The LLM extracts, with the source URL for every field:
+1. **Crawl** (D11). Save the raw HTML of every page (`source_pages`).
+   - The homepage plus up to 8 subpages **within the profile's path prefix**
+     (so `/faculty/jane-doe/` doesn't wander into department pages).
+     Recruiting-style links (open positions, join, prospective, contact…)
+     come first.
+   - **One extra hop** (up to 3 pages) for recruiting-style links that
+     appear only on a subpage.
+   - **"Website / Homepage / Lab" links** off a directory profile, each
+     explored like a homepage (up to 5 subpages).
+   - **Lab sites** linked from the personal site (up to 2), labeled `lab`.
+   - **Pages the user submitted** as evidence, always re-read.
+   - Page text keeps everything visible (sidebars, collapsible sections),
+     drops navigation, site footers and "Skip to" links, and marks headings
+     (`## `) and list items (`- `).
+   - Pages that fail are kept and listed; 403s and bot challenges are never
+     bypassed. Incomplete TLS chains are retried unverified and flagged
+     (D12).
+2. Extraction (offline rules or a model) returns, with the source URL for
+   every field:
 
 | Field | Notes |
 | --- | --- |
 | `title`, `department`(s), `email`, `lab_url` | Directory-style facts |
 | `stated_interests`, `bio_summary` | Input to Stage ② screening |
 | `recent_publications[]` | Titles and years only. Suggestions for Stage ③; the user still uploads papers |
-| `recruiting_status` | `explicitly_recruiting \| recruits_generally \| not_recruiting \| unknown` |
-| `recruiting_cycle` | The cycle named in the statement, e.g. "Fall 2026 start". Flagged **stale** if it's earlier than the user's target cycle |
-| `contact_policy` | `welcomes_email \| apply_via_program \| do_not_email \| unknown` |
-| `recruiting_evidence` | Exact quote + source URL |
+| `claims[]` | Every recruiting or contact-policy statement: kind, claim, cycle named, **exact quote**, source URL. Interpretation rules: D10 |
 
 Quotes are checked against the saved page text. A field whose quote can't
 be found is thrown out, not kept.
@@ -279,8 +302,13 @@ are never overwritten by a refresh.
 4. Store the result in `ScreenResult`, versioned by `profile_version` so a
    changed resume triggers a re-screen.
 
-**UI:** a ranked table with filters (school, department, label,
-recruiting status, contact policy) and a shortlist toggle. **Research fit**
+**Offline mode:** research fit is hidden, because keyword overlap was
+misleading (D16). It reappears with a real model.
+
+**UI:** a table grouped **Papers analyzed → Pinned → Others → Dismissed**
+(D22; the first two require `professors.pinned`), with ★ strong matches
+first in each group, filters (school, search), a 📌 pin toggle on every row
+and a "+ paper" shortcut. **Research fit**
 (from screening) and **recruiting status** (from §4.1 Step 4) are separate
 columns, so the user can sort by either.
 
@@ -356,6 +384,10 @@ the warning.
 - `follow_up_at` defaults to sent + 14 days. The dashboard shows follow-ups
   that are due.
 
+**Analyses written outside the pipeline** (e.g. by Claude in a session) are
+imported with `PUT /papers/{id}/analysis`. Every connection point must quote
+the paper and the resume verbatim, and is labeled with `analyzed_by` (D21).
+
 ### 4.5 Professor lifecycle
 
 ```text
@@ -364,7 +396,43 @@ added → resolved → screened → shortlisted → analyzed → drafted → con
 ```
 
 `Professor.status` is kept up to date from actions in each stage and drives
-the dashboard.
+the dashboard. The UI shows it as plain stage names: Looking up, New,
+Pinned, Papers analyzed, Email drafted, Contacted, Replied, Closed,
+Dismissed.
+
+### 4.6 Choosing programs (Compare page)
+
+One row per application at a **target school** (D19):
+
+- **Computed:**
+  - matched faculty at the school, and how many likely advise through
+    *this* program (a heuristic on department names),
+  - how many of those have current recruiting evidence, and how many name
+    the target cycle,
+  - program type and deadline.
+- **Assessment:** fit 1–5, tier (reach / target / likely), "why apply", and
+  gaps & risks. Pre-filled as `assessment_by = claude` and shown as
+  "suggested"; any edit makes it `user`.
+- **Decision:** undecided / top8 / final5 / drop, with counters for 8 and 5
+  and the reach/target/likely mix. Decisions are the user's.
+
+### 4.7 Application tracker (Applications page)
+
+- One application per program, with:
+  - the deadline, its exact wording and source URL,
+  - a cycle flag: `fall2027`, `previous` (only last year's date posted), or
+    `unknown` (year not stated),
+  - the apply URL and requirements (GRE, letters, fee, English test,
+    faculty naming).
+- Creating an application adds an **11-step checklist**. Each step's due
+  date is counted back from the deadline (e.g. ask recommenders 42 days
+  before; submit on the deadline). Moving the deadline moves the default
+  steps that weren't edited by hand.
+- **Do next:** unfinished steps across active applications, sorted by due
+  date.
+- Each card lists **faculty to name**: the user's pinned professors at that
+  school, with their recruiting and contact status.
+- Schools are selected on My profile (`schools.is_target`).
 
 ---
 
@@ -384,7 +452,8 @@ user_profiles
   embedding vector(N), is_active
 
 schools
-  user_id, name, aliases[], primary_domain, website, confirmed (bool)
+  user_id, name, aliases[], primary_domain, website, confirmed (bool),
+  suggestions (jsonb: OpenAlex candidates when unrecognized), is_target (bool)
 
 professors
   school_id, name, input_raw (text the user typed),
@@ -397,17 +466,19 @@ professors
   recruiting_status (explicitly_recruiting | recruits_generally |
                      not_recruiting | unknown),
   recruiting_cycle (text), recruiting_stale (bool),
+  recruiting_confidence (high | medium | low; cached from evidence),
   contact_policy (welcomes_email | apply_via_program | do_not_email | unknown),
   recruiting_evidence (text), recruiting_source_url,
   field_sources (jsonb: field → source_page_id),
   user_overrides (jsonb: fields the user edited; never overwritten),
-  last_checked_at, status (enum, see §4.5), notes
+  last_checked_at, status (enum, see §4.5), pinned (bool, independent of status), notes
   UNIQUE (school_id, normalized_name)
 
 evidence
   professor_id, kind (recruiting | contact_policy), claim, cycle,
   quote, quote_hash, source_url, source_type, page_updated_at,
-  first_seen_at, last_seen_at, gone_at, extractor
+  first_seen_at, last_seen_at, gone_at, extractor (fake | ollama:… | user),
+  verified (false only for user sentences from unreadable pages)
   UNIQUE (professor_id, kind, source_url, quote_hash)
 
 homepage_candidates
@@ -416,8 +487,8 @@ homepage_candidates
 
 source_pages
   professor_id, url, final_url (after redirects),
-  kind (homepage | subpage | directory),
-  raw_html_path, text, fetched_at, fetch_status, extract_status, error
+  kind (homepage | subpage | linked_site | lab_site | user_submitted),
+  raw_html_path, text, page_updated_at, fetched_at, fetch_status, error
 
 screen_results
   professor_id, profile_version, similarity_score (float),
@@ -427,14 +498,14 @@ papers
   professor_id, source_type (pdf | url), source_url, file_path,
   sha256, doi, title, authors[], year, venue,
   full_text, text_status (full | abstract_only | failed),
-  summary (jsonb), embedding vector(N)
+  summary (jsonb), summary_by, embedding vector(N)
   UNIQUE (professor_id, doi) / (professor_id, norm_title, year)
 
 connection_points
   professor_id, paper_id, profile_version,
   kind (method_overlap | domain_overlap | future_work_hook),
   paper_evidence (text), user_evidence (text), explanation (text),
-  selected (bool)
+  selected (bool), analyzed_by
 
 email_drafts
   professor_id, version (int), subject, body, tone, ask,
@@ -443,6 +514,17 @@ email_drafts
 outreach
   professor_id, email_draft_id, sent_at, to_address,
   subject, body (snapshot), status, follow_up_at, notes
+
+applications
+  user_id, school_id, program, deadline, deadline_text, deadline_cycle,
+  deadline_source_url, apply_url, requirements (jsonb),
+  status (planning | in_progress | submitted | interview | admitted |
+          waitlisted | rejected | withdrawn), notes,
+  fit_score (1–5), tier (reach | target | likely), reason, gaps,
+  decision (undecided | top8 | final5 | drop), assessment_by (claude | user)
+
+application_steps
+  application_id, label, position, done, done_at, due_date
 
 jobs
   kind, payload (jsonb), status (queued | running | done | failed),
@@ -474,11 +556,30 @@ jobs
 | `POST` | `/professors/{id}/outreach` | Mark as sent (snapshots the draft) |
 | `PATCH` | `/outreach/{id}` | Update status, follow-up date, notes |
 | `GET` | `/outreach?due=true` | Outreach tracker / follow-ups due |
-| `GET` | `/jobs/{id}` | Background job status |
+| `POST` | `/professors/{id}/evidence` | Add evidence: a URL, optionally with the exact sentence (verified; unverified if the page blocks the app) |
+| `DELETE` | `/professors/evidence/{id}` | Remove evidence the user added |
+| `PUT` | `/papers/{id}/analysis` | Import a summary + connection points; quotes verified |
+| `POST` | `/schools` · `PATCH` `/schools/{id}/target` · `POST` `/schools/{id}/confirm` | Add a school by name, select it as a target, confirm/merge an unrecognized one |
+| `GET/POST/PATCH/DELETE` | `/applications` | Application tracker; PATCH also sets assessment fields |
+| `POST` `/applications/{id}/steps` · `PATCH/DELETE` `/application-steps/{id}` | | Checklist steps |
+| `GET` | `/applications/todo` | "Do next" across applications |
+| `GET` | `/compare` | Compare-page rows for target schools |
+| `GET` | `/jobs`, `/jobs/{id}` | Background job status |
 
 ---
 
-## 7. LLM usage (Claude)
+## 7. LLM usage
+
+**Current state (D5–D7):**
+
+| Provider | Status | Used for |
+| --- | --- | --- |
+| `fake` | **Default.** Rule-based, offline, deterministic | All tasks. Recruiting/contact extraction and interests are reliable; generated text is marked `[FAKE]` |
+| `ollama` | Implemented; evaluated with `llama3.2` 3B and **not adopted** for extraction (12 of 25 claims invented) | `extract_profile` only; everything else falls back to the rules |
+| `claude` | Planned (needs `ANTHROPIC_API_KEY`); not yet implemented | The plan below |
+| Claude in-session | Used now via research agents and `PUT /papers/{id}/analysis` | Professor discovery (D17), paper analysis (D21) |
+
+The rest of this section is the plan for the `claude` provider.
 
 **Provider:** Anthropic Claude, called through the official `anthropic`
 Python SDK. The API key lives in `.env` as `ANTHROPIC_API_KEY`. The rest of
@@ -499,8 +600,8 @@ it. That is a measured decision, not a default.
   Effort is **always set explicitly**, because Opus 5.5 defaults to `medium`.
 - **Web search:** the server-side `web_search_20260209` tool, used only in
   `find_homepage`. Claude runs the searches on Anthropic's side, and the
-  response includes result URLs the app then verifies. This *is* the
-  `search/` adapter's default implementation; Brave Search can be added
+  response includes result URLs the app then verifies. This is the
+  default homepage-search implementation; Brave Search can be added
   behind the same interface.
 - **Refusals:** check `stop_reason` before reading content. Server-side
   fallback is enabled (`fallbacks: "default"` with its beta header). This
@@ -517,45 +618,7 @@ it. That is a measured decision, not a default.
   `usage.cache_read_input_tokens` to confirm hits.
 
 | Task | Input | Output | Effort | Volume |
-| --- | --- | --- | --- | --- |
-| `parse_professor_input` | free-form text | `[{name, school_raw, department_raw, url, issues}]` | low | 1 per paste |
-| `normalize_school` | school text | `{name, aliases, primary_domain}` | low | 1 per new school |
-| `find_homepage` | name + school + domain, **web search tool** | `[{url, reason}]` candidates | low | 1 per professor (≤3 searches) |
-| `verify_homepage` | candidate page text + name + school | `{is_match, confidence, reason}` | low | ≤3 per professor |
-| `extract_profile` | homepage + subpage text | profile, publications, recruiting and contact-policy fields with quotes | medium | 1 per professor per refresh |
-| `structure_resume` | resume text | structured profile | medium | 1 per resume version |
-| `screen_professor` | profile (cached) + interests | `{label, reason}` | low | 1 per professor per screen run (batched) |
-| `summarize_paper` | paper text (sections) | structured summary | medium | 1 per paper |
-| `find_connections` | summaries + profile (cached) | `[ConnectionPoint]` | high | 1 per analysis |
-| `draft_email` | connections + profile + prof | `{subject, body}` | high | 1 per draft |
-
-**Other cost controls:** cache results in the DB by
-`(task, prompt_version, model, input_hash)` so re-running a step on
-unchanged input costs nothing. Log `usage` for every call to a `llm_calls`
-table so real cost per professor can be seen.
-
-**Embeddings:** Claude doesn't provide embeddings, and at this scale (tens
-to a few hundred professors) screening can be done by Claude directly. The
-MVP therefore **skips embeddings**. The `embedding` columns and pgvector stay
-in the schema, unused. If similarity search is wanted later ("professors
-like my shortlist"), a local `sentence-transformers` model can fill them
-with no new vendor and no data leaving the machine.
-
---- | --- | --- | --- |
-| `parse_professor_input` | free-form text | `[{name, school_raw, department_raw, url, issues}]` | 1 per paste |
-| `normalize_school` | school text | `{name, aliases, primary_domain}` | 1 per new school |
-| `verify_homepage` | candidate page text + name + school | `{is_match, confidence, reason}` | ≤3 per professor |
-| `extract_profile` | homepage + subpage text | profile, publications, recruiting and contact-policy fields with quotes | 1 per professor per refresh |
-| `structure_resume` | resume text | structured profile | 1 per resume version |
-| `screen_professor` | profile + interests | `{label, reason}` | 1 per professor per screen run |
-| `summarize_paper` | paper text (sections) | structured summary | 1 per paper |
-| `find_connections` | summaries + profile | `[ConnectionPoint]` | 1 per analysis |
-| `draft_email` | connections + profile + prof | `{subject, body}` | 1 per draft |
-
-Cost controls: cache by `(task, prompt_version, input_hash)`, use a smaller
-model for extraction and screening, and use a stronger model for connection
-finding and emails.
-
+| --- | 
 ---
 
 ## 8. Repository layout
@@ -566,7 +629,8 @@ PhDDog/
 ├── docker-compose.yml
 ├── .env.example
 ├── docs/
-│   └── DESIGN.md
+│   ├── DESIGN.md
+│   └── DECISIONS.md       # decision log
 ├── backend/
 │   ├── pyproject.toml
 │   ├── alembic/
@@ -575,10 +639,9 @@ PhDDog/
 │       ├── config.py
 │       ├── db/            # models, session
 │       ├── api/           # routers per resource
-│       ├── services/      # resolve, screen, papers, analyze, outreach
-│       ├── ingest/        # fetchers, crawler, html/pdf extractors, paper-source handlers
-│       ├── search/        # web search provider adapter
-│       ├── llm/           # provider adapter, prompts/, schemas
+│       ├── services/      # professors (resolve/crawl), evidence, schools, screen, papers, outreach, applications, jobs
+│       ├── ingest/        # fetch, html (text + link rules), pdf, paper sources, openalex
+│       ├── llm/           # adapter: fake (rules), ollama, claude (planned); schemas
 │       ├── storage/       # local / S3 adapter
 │       └── worker.py      # job runner
 │   └── tests/
@@ -588,8 +651,10 @@ PhDDog/
 │       ├── profile/
 │       ├── add/               # free-form input + parse preview + review queue
 │       ├── professors/        # screening board
-│       ├── professors/[id]/   # deep-dive + email editor
-│       └── outreach/          # tracker
+│       ├── professors/[id]/   # recruiting evidence, papers, connections, email editor
+│       ├── outreach/          # outreach log
+│       ├── compare/           # choose programs
+│       └── applications/      # deadlines + checklists
 └── data/                  # gitignored: raw html, pdfs, resumes
 ```
 
@@ -649,11 +714,14 @@ The app is usable for real outreach after **M5**.
 
 ## 12. Open decisions
 
+Settled decisions and their reasons are in [DECISIONS.md](DECISIONS.md).
+Still open:
+
 | Decision | Options | Current lean |
 | --- | --- | --- |
-| LLM provider | Claude / OpenAI / local | ✅ **Claude**, `claude-opus-5-5`, effort tuned per task |
-| Embedding model | Provider API / local (e.g. sentence-transformers) | ✅ None in MVP; local model later if needed |
-| Web search provider | Claude web search tool / Brave Search API / Tavily / Exa | ✅ Claude web search tool |
-| Target admission cycle | Setting used for `recruiting_stale` | Fall 2027 |
-| Deployment | Local only / hosted | Local only for MVP |
-| Paper year window | Fixed 2025–2026 / rolling | Configurable; default = current year + previous year |
+| Real model provider | Claude API key / 8B local model (Ollama) | Test on summaries, connections and emails, not extraction (D7) |
+| Homepage search | Claude web search / Brave Search | Needed only to add professors by name alone (D14) |
+| Unresearched programs | UCSF Computational Precision Health, UIUC iSchool, BU Computing & Data Sciences | Research if they could make the shortlist |
+| Unselected schools' applications | Delete / mark withdrawn / keep (Harvard, UCLA) | Ask the user |
+| Target admission cycle | Setting used for staleness | Fall 2027 |
+| Deployment | Local only / hosted | Local only |

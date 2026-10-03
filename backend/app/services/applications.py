@@ -107,6 +107,6 @@ def pinned_faculty(db: Session, app: Application) -> list[Professor]:
     return db.scalars(
         select(Professor).where(
             Professor.school_id == app.school_id,
-            Professor.status.in_(["shortlisted", "analyzed", "drafted", "contacted", "replied"]),
+            Professor.pinned,
         ).order_by(Professor.name)
     ).all()

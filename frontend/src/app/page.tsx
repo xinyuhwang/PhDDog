@@ -19,7 +19,7 @@ export default function Dashboard() {
     { label: "Professors", value: profs?.length ?? 0, href: "/professors" },
     showFit
       ? { label: "Strong fit", value: count((p) => p.screen?.label === "strong"), href: "/professors" }
-      : { label: "Pinned", value: count((p) => p.status === "shortlisted"), href: "/professors" },
+      : { label: "Pinned", value: count((p) => p.pinned), href: "/professors" },
     { label: "Needs review", value: count((p) => ["needs_review", "not_found"].includes(p.resolve_status)), href: "/add" },
     { label: "Contacted", value: count((p) => ["contacted", "replied", "closed"].includes(p.status)), href: "/outreach" },
   ];
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const steps = [
     { done: !!profile, text: "Upload your resume and add a research statement", href: "/profile" },
     { done: (profs?.length ?? 0) > 0, text: "Add professors: “Name, School” — one per line", href: "/add" },
-    { done: count((p) => ["shortlisted", "analyzed", "drafted", "contacted", "replied"].includes(p.status)) > 0, text: "Pin professors (📌), then add their recent papers (PDF or link)", href: "/professors" },
+    { done: count((p) => p.pinned) > 0, text: "Pin professors (📌), then add their recent papers (PDF or link)", href: "/professors" },
     { done: count((p) => ["contacted", "replied", "closed"].includes(p.status)) > 0, text: "Draft an email, send it yourself, and log it", href: "/outreach" },
   ];
 

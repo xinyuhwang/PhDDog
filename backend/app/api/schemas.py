@@ -16,6 +16,7 @@ class ProfileOut(ORM):
     resume_file_path: str | None
     resume_text: str | None
     research_statement: str | None
+    project_notes: str | None = None
     keywords: list[str]
     structured_profile: StructuredProfile | None
     created_at: datetime
@@ -24,6 +25,7 @@ class ProfileOut(ORM):
 class ProfileIn(BaseModel):
     research_statement: str | None = None
     keywords: list[str] = []
+    project_notes: str | None = None  # omitted = keep current
 
 
 class ParseIn(BaseModel):
@@ -94,6 +96,7 @@ class ProfessorSummary(ORM):
     last_checked_at: datetime | None
     check_stale: bool = False  # last site check is older than RECHECK_AFTER_DAYS
     notes: str | None = None
+    pinned: bool = False
     status: str
     screen: ScreenOut | None = None
 
@@ -145,6 +148,7 @@ class ProfessorPatch(BaseModel):
     contact_policy: str | None = None
     status: str | None = None
     notes: str | None = None
+    pinned: bool | None = None
 
 
 class HomepageIn(BaseModel):
@@ -178,6 +182,7 @@ class PaperOut(ORM):
     text_status: str
     error: str | None
     summary: dict | None
+    summary_by: str | None = None
     text_chars: int = 0
     year_warning: bool = False
     created_at: datetime
@@ -192,6 +197,7 @@ class ConnectionPointOut(ORM):
     user_evidence: str
     explanation: str
     selected: bool
+    analyzed_by: str | None = None
 
 
 class ConnectionSelectIn(BaseModel):
