@@ -330,6 +330,12 @@ CSE. The 12 non-CS programs are dropped but can be restored.
 professors with Fall 2027 openings. Stanford CS and BU CS were re-scored as
 those schools' only options.
 
+**Update (Oct 7).** The Applications page now follows the same filter.
+Programs marked "drop" on Compare, and programs at schools unselected on My
+profile, are left out of "Do next", the totals and the main cards. They sit
+in a collapsed section, with their checklist progress kept, so restoring one
+on Compare or My profile brings it back.
+
 ---
 
 ## Analysis and UI

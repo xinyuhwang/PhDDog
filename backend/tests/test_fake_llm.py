@@ -100,6 +100,14 @@ def test_postdoc_statements_are_not_phd_recruiting():
     assert [(c.kind, c.claim) for c in claims] == [("recruiting", "explicitly_recruiting")]
 
 
+def test_visiting_student_statements_are_not_phd_recruiting():
+    page = PageText(url="https://x.edu/joining.html", text=(
+        "Sorry, I am generally not taking any visiting students from outside of UW. "
+        "We are not accepting visiting scholars this year."
+    ))
+    assert not [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "recruiting"]
+
+
 @pytest.mark.parametrize("sentence", [
     "Select me as a potential advisor in your application.",
     "If you are interested in our research group, please list Eric Eaton as a prospective advisor in your PhD application and statement of purpose.",

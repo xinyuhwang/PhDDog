@@ -31,9 +31,15 @@ export default function ApplicationsPage() {
   const schools = useApi<School[]>("/schools");
   const reload = () => { apps.reload(); todo.reload(); };
 
-  const withApp = new Set(apps.data?.map((a) => a.school_id));
+  const [showOther, setShowOther] = useState(false);
+  // Programs at schools unselected on My profile, or dropped on Compare, stay out of the way but aren't deleted.
+  const targetIds = new Set(schools.data?.filter((s) => s.is_target).map((s) => s.id));
+  const inPlay = (a: Application) => targetIds.has(a.school_id) && a.decision !== "drop";
+  const selected = apps.data?.filter(inPlay) ?? [];
+  const other = schools.data ? apps.data?.filter((a) => !inPlay(a)) ?? [] : [];
+  const withApp = new Set(selected.map((a) => a.school_id));
   const missing = schools.data?.filter((s) => s.is_target && !withApp.has(s.id)) ?? [];
-  const active = apps.data?.filter((a) => ["planning", "in_progress"].includes(a.status)) ?? [];
+  const active = selected.filter((a) => ["planning", "in_progress"].includes(a.status));
   const totals = active.reduce((t, a) => ({ left: t.left + a.remaining, overdue: t.overdue + a.overdue, soon: t.soon + a.due_soon }),
     { left: 0, overdue: 0, soon: 0 });
   const nextDeadline = active.filter((a) => a.deadline).sort((a, b) => a.deadline!.localeCompare(b.deadline!))[0];
@@ -42,7 +48,7 @@ export default function ApplicationsPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
-          ["Applications", apps.data?.length ?? 0],
+          ["Applications", selected.length],
           ["Steps left", totals.left],
           ["Overdue / due this week", `${totals.overdue} / ${totals.soon}`],
           ["Next deadline", nextDeadline ? `${nextDeadline.school_name.replace("University of ", "U. ")} · ${fmt(nextDeadline.deadline)}` : "—"],
@@ -81,8 +87,20 @@ export default function ApplicationsPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {apps.data?.map((a) => <ApplicationCard key={a.id} app={a} onChanged={reload} />)}
+        {selected.map((a) => <ApplicationCard key={a.id} app={a} onChanged={reload} />)}
       </div>
+      {other.length > 0 && (
+        <div className="space-y-4">
+          <button className="text-sm text-stone-500 hover:text-stone-700" onClick={() => setShowOther(!showOther)}>
+            {showOther ? "▾" : "▸"} {other.length} program{other.length > 1 ? "s" : ""} dropped on Compare or at schools not selected on My profile
+          </button>
+          {showOther && (
+            <div className="grid gap-6 opacity-70 lg:grid-cols-2">
+              {other.map((a) => <ApplicationCard key={a.id} app={a} onChanged={reload} />)}
+            </div>
+          )}
+        </div>
+      )}
       {apps.data && !apps.data.length && (
         <p className="text-sm text-stone-500">No applications yet. Pick your schools on <Link href="/profile" className="text-indigo-600 hover:underline">My profile</Link>, then add programs here.</p>
       )}

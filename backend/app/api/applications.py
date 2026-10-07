@@ -48,6 +48,7 @@ class ApplicationOut(BaseModel):
     apply_url: str | None
     requirements: dict
     status: str
+    decision: str
     notes: str | None
     steps: list[StepOut]
     done: int
@@ -121,7 +122,7 @@ def _out(db, app: Application) -> ApplicationOut:
     return ApplicationOut(
         id=app.id, school_id=app.school_id, school_name=app.school.name, program=app.program, deadline=app.deadline,
         deadline_text=app.deadline_text, deadline_cycle=app.deadline_cycle, deadline_source_url=app.deadline_source_url,
-        apply_url=app.apply_url, requirements=app.requirements or {}, status=app.status, notes=app.notes,
+        apply_url=app.apply_url, requirements=app.requirements or {}, status=app.status, decision=app.decision, notes=app.notes,
         steps=[_step(s, app) for s in app.steps], done=p.done, total=p.total, remaining=p.remaining,
         overdue=p.overdue, due_soon=p.due_soon, days_left=p.days_left,
         next_step=_step(p.next_step, app) if p.next_step else None,

@@ -38,6 +38,9 @@ def test_application_tracker(database):
 
     client.patch(f"/schools/{school['id']}/target", json={"is_target": False})
     assert not next(s for s in client.get("/schools").json() if s["id"] == school["id"])["is_target"]
+    # Unselecting the school hides its steps from "Do next" but keeps the application.
+    assert not any(t["application_id"] == a["id"] for t in client.get("/applications/todo").json())
+    assert any(x["id"] == a["id"] for x in client.get("/applications").json())
 
 
 def test_compare(database):
@@ -56,3 +59,9 @@ def test_compare(database):
     [row] = [x for x in client.get("/compare").json() if x["id"] == a["id"]]
     assert (row["fit_score"], row["tier"], row["decision"], row["assessment_by"]) == (4, "target", "top8", "user")
     assert client.patch(f"/applications/{a['id']}", json={"fit_score": 9}).status_code == 400
+
+    # Dropping a program on Compare takes its steps out of "Do next" but keeps the application.
+    assert any(t["application_id"] == a["id"] for t in client.get("/applications/todo?limit=500").json())
+    client.patch(f"/applications/{a['id']}", json={"decision": "drop"})
+    assert not any(t["application_id"] == a["id"] for t in client.get("/applications/todo?limit=500").json())
+    assert next(x for x in client.get("/applications").json() if x["id"] == a["id"])["decision"] == "drop"

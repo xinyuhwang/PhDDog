@@ -301,7 +301,8 @@ class FakeLLM:
         )
         # Recruiting statements about other roles say nothing about PhD openings.
         other_roles = re.compile(
-            r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*)\b", re.I
+            r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*|"
+            r"visiting\s+(?:\w+\s+)?(?:students?|scholars?|researchers?))\b", re.I
         )
         phd_re = re.compile(r"\b(ph\.?\s?d|doctoral|graduate students?)\b", re.I)
         # "our PhD students" are the lab's current members, not applicants.

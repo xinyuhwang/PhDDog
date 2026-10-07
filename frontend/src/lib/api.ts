@@ -236,6 +236,7 @@ export type Application = {
   apply_url: string | null;
   requirements: Record<string, string>;
   status: string;
+  decision: string;
   notes: string | null;
   steps: AppStep[];
   done: number;
