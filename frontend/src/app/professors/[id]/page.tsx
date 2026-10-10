@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import OutreachTasks from "@/components/OutreachTasks";
 import { Badge, Button, Card, ErrorNote, FitBadge, inputClass, PinButton, ResolveBadge, StageBadge } from "@/components/ui";
 import { api, type Job, type ProfessorDetail } from "@/lib/api";
 import { useApi, useHealth, useShowFit } from "@/lib/hooks";
@@ -91,6 +92,7 @@ export default function ProfessorPage() {
       )}
 
       <PapersPanel professorId={id} onJob={refreshJobs} busy={busy} />
+      <OutreachTasks professorId={id} />
       <EmailPanel prof={prof} onChanged={reload} />
     </div>
   );

@@ -269,6 +269,20 @@ class Outreach(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
 
+class OutreachTask(TimestampMixin, Base):
+    """Something to do for a professor (or in general): steps to tick off, links, and what to mention."""
+
+    __tablename__ = "outreach_tasks"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    professor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("professors.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(Text)
+    steps: Mapped[list] = mapped_column(JSONB, default=list)  # [{"text": str, "done": bool}]
+    links: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": str, "url": str}]
+    notes: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
 class Application(TimestampMixin, Base):
     """One PhD program the user is applying to, with its deadline and a checklist of steps."""
 

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -255,6 +255,49 @@ class OutreachPatch(BaseModel):
     status: OutreachStatus | None = None
     follow_up_at: datetime | None = None
     notes: str | None = None
+
+
+class TaskStep(BaseModel):
+    text: str
+    done: bool = False
+
+
+class TaskLink(BaseModel):
+    label: str
+    url: str
+
+
+class TaskIn(BaseModel):
+    title: str
+    professor_id: uuid.UUID | None = None
+    steps: list[TaskStep] = []
+    links: list[TaskLink] = []
+    notes: str | None = None
+    due_date: date | None = None
+
+
+class TaskPatch(BaseModel):
+    title: str | None = None
+    professor_id: uuid.UUID | None = None
+    steps: list[TaskStep] | None = None
+    links: list[TaskLink] | None = None
+    notes: str | None = None
+    due_date: date | None = None
+    done: bool | None = None
+
+
+class TaskOut(ORM):
+    id: uuid.UUID
+    title: str
+    professor_id: uuid.UUID | None
+    professor_name: str | None = None
+    school_name: str | None = None
+    steps: list[TaskStep]
+    links: list[TaskLink]
+    notes: str | None
+    due_date: date | None
+    done: bool
+    created_at: datetime
 
 
 class JobOut(ORM):

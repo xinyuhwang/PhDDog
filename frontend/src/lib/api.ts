@@ -183,6 +183,20 @@ export type Draft = {
   created_at: string;
 };
 
+export type OutreachTask = {
+  id: string;
+  title: string;
+  professor_id: string | null;
+  professor_name: string | null;
+  school_name: string | null;
+  steps: { text: string; done: boolean }[];
+  links: { label: string; url: string }[];
+  notes: string | null;
+  due_date: string | null;
+  done: boolean;
+  created_at: string;
+};
+
 export type Outreach = {
   id: string;
   professor_id: string;

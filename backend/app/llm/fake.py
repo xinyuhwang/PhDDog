@@ -362,10 +362,14 @@ class FakeLLM:
                     out.claims.append(Claim(kind="recruiting", claim=recruit, cycle=cycle, quote=s, source_url=p.url))
 
                 about_other_roles = bool(other_roles.search(s) and not phd.search(s))
+                # "If you plan to apply to the program …, please email me" invites email; applying is the condition.
+                conditional_apply = re.search(r"\bif you\b[^.]{0,40}\bapply", s, re.I) and welcomes.search(s)
                 for policy, pattern in (
                     ("do_not_email", do_not_email), ("apply_via_program", apply_program),
                     ("apply_via_program", name_me_as_advisor), ("welcomes_email", welcomes),
                 ):
+                    if conditional_apply and policy == "apply_via_program":
+                        continue
                     if not about_other_roles and pattern.search(s):
                         if ("contact_policy", s) not in seen:
                             seen.add(("contact_policy", s))

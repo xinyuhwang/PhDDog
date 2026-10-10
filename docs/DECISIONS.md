@@ -374,6 +374,27 @@ at the top.
   "strongest", "very strong" or "best … match". They're marked ★.
 - **The row action is "+ paper"**; the "Open →" link was removed.
 
+### D23. Outreach to-do tasks (Oct 9)
+
+**Decision.** A "To do" section under the log on the Outreach page,
+backed by a new `outreach_tasks` table and `/outreach-tasks` endpoints.
+- **What a task has:** a title, an optional professor, a due date, checklist
+  steps, labelled links, notes ("what to mention") and a done flag.
+- **Layout:** open tasks are grouped by professor, with a "General" group last
+  and done tasks collapsed at the bottom.
+- **On the professor page:** that professor's open tasks are also shown,
+  linking back to the full list.
+
+**Why.** Replies brought multi-step instructions (Zhou's BodyMaps warm-up,
+Yang's take-home test and interest form) that didn't fit the log's single
+"notes" field.
+
+**Also fixed (extraction).**
+- "Not taking visiting students" no longer counts as not recruiting PhD
+  students.
+- "If you plan to apply …, please email me" now counts as welcoming email
+  instead of "apply via program".
+
 ---
 
 ## Not doing (and why)

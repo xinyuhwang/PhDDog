@@ -145,6 +145,17 @@ def test_recruiting_phrasings(sentence, expected):
     assert [c.claim for c in claims] == [expected]
 
 
+@pytest.mark.parametrize("sentence, expected", [
+    ("If you plan to apply to the PhD program in the CSE department and are interested in working with me, please email me.",
+     "welcomes_email"),
+    ("Please apply to the PhD program and list me as a potential advisor.", "apply_via_program"),
+])
+def test_conditional_apply_with_email_invite(sentence, expected):
+    page = PageText(url="https://x.edu/~jd/", text=sentence)
+    claims = [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "contact_policy"]
+    assert [c.claim for c in claims] == [expected]
+
+
 def test_contacting_an_office_is_not_a_contact_policy():
     page = PageText(url="https://x.edu/~a/", text=(
         "Please contact the CFAR team in the Medical Center Development Office for assistance. "
