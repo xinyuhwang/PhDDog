@@ -236,7 +236,7 @@ function ApplicationCard({ app, onChanged }: { app: Application; onChanged: () =
               {app.faculty.map((f) => (
                 <li key={f.id} className="flex flex-wrap items-center gap-2">
                   <Link href={`/professors/${f.id}`} className="text-indigo-600 hover:underline">{f.name}</Link>
-                  <RecruitingBadge status={f.recruiting_status} />
+                  <RecruitingBadge status={f.recruiting_status} cycle={f.recruiting_cycle} stale={f.recruiting_stale} />
                   <ContactBadge policy={f.contact_policy} />
                 </li>
               ))}

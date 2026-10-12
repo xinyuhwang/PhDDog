@@ -260,7 +260,7 @@ export type Application = {
   due_soon: number;
   days_left: number | null;
   next_step: AppStep | null;
-  faculty: { id: string; name: string; recruiting_status: string; contact_policy: string }[];
+  faculty: { id: string; name: string; recruiting_status: string; recruiting_cycle: string | null; recruiting_stale: boolean; contact_policy: string }[];
 };
 
 export type TodoItem = {

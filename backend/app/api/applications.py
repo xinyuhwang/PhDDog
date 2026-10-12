@@ -33,6 +33,8 @@ class FacultyRef(BaseModel):
     id: uuid.UUID
     name: str
     recruiting_status: str
+    recruiting_cycle: str | None = None
+    recruiting_stale: bool = False
     contact_policy: str
 
 
@@ -126,7 +128,8 @@ def _out(db, app: Application) -> ApplicationOut:
         steps=[_step(s, app) for s in app.steps], done=p.done, total=p.total, remaining=p.remaining,
         overdue=p.overdue, due_soon=p.due_soon, days_left=p.days_left,
         next_step=_step(p.next_step, app) if p.next_step else None,
-        faculty=[FacultyRef(id=f.id, name=f.name, recruiting_status=f.recruiting_status, contact_policy=f.contact_policy)
+        faculty=[FacultyRef(id=f.id, name=f.name, recruiting_status=f.recruiting_status, recruiting_cycle=f.recruiting_cycle,
+                           recruiting_stale=f.recruiting_stale, contact_policy=f.contact_policy)
                  for f in svc.pinned_faculty(db, app)],
     )
 
