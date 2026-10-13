@@ -60,6 +60,19 @@ def test_extract_recruiting_and_contact_policy():
     assert x.email == "myatskar@cis.upenn.edu"
 
 
+@pytest.mark.parametrize("sentence, cycle", [
+    ("The PhD application cycle for 2027-28 start is open.", "Fall 2027"),
+    ("For the academic year 2027/2028 the HXI lab IS looking for new Prospective Ph.D. Students.", "Fall 2027"),
+    ("We are recruiting PhD students for 2027–2028.", "Fall 2027"),
+    # A date range isn't an academic year.
+    ("From 2020-2024 we were recruiting PhD students in vision.", None),
+])
+def test_extract_cycle_from_academic_year(sentence, cycle):
+    page = PageText(url="https://x.edu/~jd/", text=sentence)
+    [claim] = [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "recruiting"]
+    assert claim.cycle == cycle
+
+
 def test_extract_cycle_takes_latest_year():
     page = PageText(url="https://j.github.io/", text=(
         "I am looking for PhD students for the Fall 2025 application / Fall 2026 start cycle. "

@@ -394,6 +394,13 @@ Yang's take-home test and interest form) that didn't fit the log's single
   students.
 - "If you plan to apply …, please email me" now counts as welcoming email
   instead of "apply via program".
+- **Academic years count as cycles (Oct 11).** "2027-28", "2027–2028" and
+  "2027/2028" are read as Fall 2027. Only consecutive years count, so date
+  ranges like "2020-2024" are ignored. "The PhD application cycle … is open"
+  counts as recruiting.
+- **The UI says when a statement is undated.** A recruiting statement that
+  names no cycle shows as "Recruiting · undated", because it doesn't confirm
+  the target cycle.
 
 ---
 
