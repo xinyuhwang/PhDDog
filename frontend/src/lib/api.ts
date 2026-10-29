@@ -183,6 +183,21 @@ export type Draft = {
   created_at: string;
 };
 
+export type Venue = {
+  id: string;
+  name: string;
+  rank: number;
+  kind: "conference" | "journal" | "workshop";
+  tier: string | null;
+  deadline: string | null;
+  deadline_text: string | null;
+  why: string | null;
+  notes: string | null;
+  links: { label: string; url: string }[];
+  status: "considering" | "target" | "submitted" | "accepted" | "rejected" | "dropped";
+  updated_at: string;
+};
+
 export type OutreachTask = {
   id: string;
   title: string;

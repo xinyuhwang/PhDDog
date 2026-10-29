@@ -283,6 +283,24 @@ class OutreachTask(TimestampMixin, Base):
     done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
+class Venue(TimestampMixin, Base):
+    """A conference or journal the user may submit a paper to, ranked, with why it fits and its next deadline."""
+
+    __tablename__ = "venues"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    rank: Mapped[int] = mapped_column(Integer, default=0)
+    name: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String, default="conference")  # conference | journal | workshop
+    tier: Mapped[str | None] = mapped_column(String)  # e.g. "top", "strong", "solid"
+    deadline: Mapped[date | None] = mapped_column(Date)
+    deadline_text: Mapped[str | None] = mapped_column(Text)  # "expected ~Mar 2027", "rolling"
+    why: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    links: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": str, "url": str}]
+    # considering | target | submitted | accepted | rejected | dropped
+    status: Mapped[str] = mapped_column(String, default="considering", server_default="considering")
+
+
 class Application(TimestampMixin, Base):
     """One PhD program the user is applying to, with its deadline and a checklist of steps."""
 

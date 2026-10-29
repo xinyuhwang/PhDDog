@@ -330,6 +330,8 @@ CSE. The 12 non-CS programs are dropped but can be restored.
 professors with Fall 2027 openings. Stanford CS and BU CS were re-scored as
 those schools' only options.
 
+**Update (Oct 29).** The UW BIME exception is withdrawn because of funding concerns, so the policy is now CS departments only, including at UW (Allen School CSE). The BIME application is marked dropped, and BIME-only faculty are flagged in their notes.
+
 **Update (Oct 7).** The Applications page now follows the same filter.
 Programs marked "drop" on Compare, and programs at schools unselected on My
 profile, are left out of "Do next", the totals and the main cards. They sit
@@ -373,6 +375,19 @@ at the top.
   professors whose match note says "closest", "direct match/overlap",
   "strongest", "very strong" or "best … match". They're marked ★.
 - **The row action is "+ paper"**; the "Open →" link was removed.
+
+### D24. Publishing page for venue targets (Oct 27)
+
+**Decision.** A "Publishing" page (nav, after Applications) lists ranked
+venues: rank, name, conference/journal/workshop, tier, next deadline with a
+countdown, why it fits, notes, links, and a status (considering → target →
+submitted → accepted/rejected/dropped). It's backed by a `venues` table and
+`/venues` endpoints, editable in the app.
+
+**Why.** The user is choosing where to submit the liver tumor paper. The
+choice weighs prestige, fit with target advisors (e.g. Zongwei Zhou's main
+venues) and deadlines relative to PhD applications, and it needs to stay
+visible and updatable.
 
 ### D23. Outreach to-do tasks (Oct 9)
 

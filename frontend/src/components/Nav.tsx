@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/outreach", label: "Outreach" },
   { href: "/compare", label: "Compare" },
   { href: "/applications", label: "Applications" },
+  { href: "/publishing", label: "Publishing" },
 ];
 
 export default function Nav() {
