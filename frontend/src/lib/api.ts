@@ -240,6 +240,9 @@ export type School = {
   confirmed: boolean;
   suggestions: SchoolSuggestion[];
   is_target: boolean;
+  funding_level: "none" | "minor" | "concern" | null;
+  funding_note: string | null;
+  funding_guarantee: string | null;
   professor_count: number;
 };
 

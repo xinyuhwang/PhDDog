@@ -68,6 +68,11 @@ class School(TimestampMixin, Base):
     suggestions: Mapped[list] = mapped_column(JSONB, default=list)
     # The user plans to apply here (chosen on My profile).
     is_target: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Evidence-based PhD funding outlook: none (nothing found) | minor (budget pressure, PhD funding protected) | concern
+    funding_level: Mapped[str | None] = mapped_column(String)
+    funding_note: Mapped[str | None] = mapped_column(Text)  # what was found, with dates and source links
+    # A stated PhD funding guarantee, e.g. "5 years (stipend + tuition)", with its source. Independent of funding_level.
+    funding_guarantee: Mapped[str | None] = mapped_column(Text)
 
     professors: Mapped[list["Professor"]] = relationship(back_populates="school")
 

@@ -44,6 +44,9 @@ class SchoolOut(ORM):
     confirmed: bool
     suggestions: list[dict]
     is_target: bool
+    funding_level: str | None = None
+    funding_note: str | None = None
+    funding_guarantee: str | None = None
     professor_count: int = 0
 
 
@@ -54,6 +57,14 @@ class SchoolCreateIn(BaseModel):
 
 class SchoolTargetIn(BaseModel):
     is_target: bool
+
+
+class SchoolFundingIn(BaseModel):
+    """Only the fields sent are changed."""
+
+    funding_level: Literal["none", "minor", "concern"] | None = None
+    funding_note: str | None = None
+    funding_guarantee: str | None = None
 
 
 class SchoolConfirmIn(BaseModel):
