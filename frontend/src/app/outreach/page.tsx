@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useState } from "react";
 
+import OutreachTasks from "@/components/OutreachTasks";
 import { Badge, Card, inputClass } from "@/components/ui";
 import { api, type Outreach } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
@@ -15,6 +16,7 @@ export default function OutreachPage() {
   const patch = async (id: string, body: Partial<Outreach>) => { await api.patch(`/outreach/${id}`, body); reload(); };
 
   return (
+    <div className="space-y-6">
     <Card title={`Outreach log (${data?.length ?? 0})`}>
       {!data?.length ? <p className="text-sm text-stone-500">No emails logged yet. Draft one from a professor&apos;s page and click “Mark as sent”.</p> : (
         <div className="overflow-x-auto">
@@ -62,5 +64,7 @@ export default function OutreachPage() {
         </div>
       )}
     </Card>
+    <OutreachTasks />
+    </div>
   );
 }

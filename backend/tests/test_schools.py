@@ -66,3 +66,21 @@ def test_confirm_merges_into_existing_school(database, monkeypatch):
     # "NU" now means Northeastern for this user.
     [entry] = client.post("/professors/parse", json={"text": "Tina Eliassi-Rad, NU"}).json()
     assert "duplicate" in entry["issues"]
+
+
+def test_school_funding_outlook(database):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    s = client.post("/schools", json={"name": "Tufts University"}).json()
+    assert s["funding_level"] is None
+    s = client.patch(f"/schools/{s['id']}/funding", json={"funding_level": "concern", "funding_note": "PhD intake cut (source)"}).json()
+    assert (s["funding_level"], s["funding_note"]) == ("concern", "PhD intake cut (source)")
+    listed = next(x for x in client.get("/schools").json() if x["id"] == s["id"])
+    assert listed["funding_level"] == "concern"
+    assert client.patch(f"/schools/{s['id']}/funding", json={"funding_level": "bad"}).status_code == 422
+    # A guarantee is recorded separately and doesn't clear the concern.
+    s = client.patch(f"/schools/{s['id']}/funding", json={"funding_guarantee": "4 years (source)"}).json()
+    assert (s["funding_level"], s["funding_guarantee"]) == ("concern", "4 years (source)")

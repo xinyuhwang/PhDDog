@@ -433,6 +433,44 @@ One row per application at a **target school** (D19):
 - Each card lists **faculty to name**: the user's pinned professors at that
   school, with their recruiting and contact status.
 - Schools are selected on My profile (`schools.is_target`).
+- Programs at unselected schools, or marked "drop" on Compare, are left out
+  of "Do next", the totals and the main cards. They sit in a collapsed
+  section and keep their progress.
+
+### 4.8 Outreach to-do tasks (Outreach page, under the log)
+
+- **What a task has:** a title, an optional professor, a due date,
+  checklist steps, labelled links, and notes on what to mention.
+- **Outreach page:** open tasks are grouped by professor ("General" last);
+  done tasks collapse at the bottom.
+- **Professor page:** that professor's open tasks also appear, linking back.
+- **Typical use:** follow-up instructions from professors (warm-up tasks,
+  take-home tests, interest forms, meeting prep).
+
+### 4.9 Publishing targets (Publishing page)
+
+- A ranked list of conferences and journals for the user's paper.
+- **Each entry has:** rank, name, conference/journal/workshop, tier, next
+  deadline with a countdown (or "rolling"), why it fits, notes (page
+  limits, review and preprint policies), links, and a status (considering →
+  target → submitted → accepted / rejected / dropped).
+- **Dropped venues** collapse into their own card.
+
+### 4.10 Funding outlook per school (My profile)
+
+- **Concern level:** each school can carry an evidence-based
+  `funding_level`:
+  - `concern` shows ⚠ funding;
+  - `minor` shows ⓘ (budget pressure, PhD funding protected);
+  - `none` shows no label.
+- **Guarantee:** separately, `funding_guarantee` records a stated PhD
+  funding guarantee (e.g. "5 years"), shown as ✓ funded. A school can have
+  both, e.g. UMass.
+- **Source rule:** both are set only from cited sources (2025–26 news,
+  university pages). "No label" means nothing was found, not that funding
+  is secure.
+- **On My profile:** the school chips show the labels, and two expandable
+  boxes list the evidence.
 
 ---
 
@@ -453,7 +491,9 @@ user_profiles
 
 schools
   user_id, name, aliases[], primary_domain, website, confirmed (bool),
-  suggestions (jsonb: OpenAlex candidates when unrecognized), is_target (bool)
+  suggestions (jsonb: OpenAlex candidates when unrecognized), is_target (bool),
+  funding_level (none | minor | concern), funding_note (text, with sources),
+  funding_guarantee (text: stated PhD funding guarantee + source)
 
 professors
   school_id, name, input_raw (text the user typed),
@@ -526,6 +566,15 @@ applications
 application_steps
   application_id, label, position, done, done_at, due_date
 
+outreach_tasks
+  user_id, professor_id (nullable), title, steps (jsonb [{text, done}]),
+  links (jsonb [{label, url}]), notes, due_date, done (bool)
+
+venues
+  user_id, rank, name, kind (conference | journal | workshop), tier,
+  deadline, deadline_text, why, notes, links (jsonb),
+  status (considering | target | submitted | accepted | rejected | dropped)
+
 jobs
   kind, payload (jsonb), status (queued | running | done | failed),
   attempts, error, started_at, finished_at
@@ -564,6 +613,9 @@ jobs
 | `POST` `/applications/{id}/steps` · `PATCH/DELETE` `/application-steps/{id}` | | Checklist steps |
 | `GET` | `/applications/todo` | "Do next" across applications |
 | `GET` | `/compare` | Compare-page rows for target schools |
+| `GET/POST/PATCH/DELETE` | `/outreach-tasks` (`?professor_id=`) | Outreach to-do tasks |
+| `GET/POST/PATCH/DELETE` | `/venues` | Publishing targets |
+| `PATCH` | `/schools/{id}/funding` | Set funding level, note and guarantee (only the fields sent change) |
 | `GET` | `/jobs`, `/jobs/{id}` | Background job status |
 
 ---

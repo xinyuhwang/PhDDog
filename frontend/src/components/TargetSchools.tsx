@@ -31,6 +31,10 @@ export default function TargetSchools() {
   }
 
   const targets = schools?.filter((s) => s.is_target) ?? [];
+  const guaranteed = (schools ?? []).filter((s) => s.funding_guarantee)
+    .sort((a, b) => Number(b.is_target) - Number(a.is_target) || a.name.localeCompare(b.name));
+  const flagged = (schools ?? []).filter((s) => s.funding_level === "concern" || s.funding_level === "minor")
+    .sort((a, b) => Number(b.is_target) - Number(a.is_target) || Number(b.funding_level === "concern") - Number(a.funding_level === "concern"));
   return (
     <Card title={`Schools I'm applying to (${targets.length})`}
       actions={<Link href="/applications" className="text-sm text-indigo-600 hover:underline">Applications →</Link>}>
@@ -43,10 +47,45 @@ export default function TargetSchools() {
               : "bg-white text-stone-600 ring-stone-300 hover:bg-stone-50"}`}>
             {s.is_target ? "✓ " : ""}{s.name}
             {s.professor_count > 0 && <span className={s.is_target ? "text-indigo-200" : "text-stone-400"}> · {s.professor_count}</span>}
+            {s.funding_guarantee && (
+              <span title={`Funding guaranteed: ${s.funding_guarantee}`}
+                className={`ml-1.5 rounded px-1 text-xs font-semibold ${s.is_target ? "bg-emerald-300 text-emerald-950" : "bg-emerald-100 text-emerald-800"}`}>✓ funded</span>
+            )}
+            <FundingMark level={s.funding_level} onDark={s.is_target} />
           </button>
         ))}
         {schools && !schools.length && <span className="text-sm text-stone-400">No schools yet.</span>}
       </div>
+      {guaranteed.length > 0 && (
+        <details className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/60 p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-emerald-900">Funding guaranteed: {guaranteed.length} schools</summary>
+          <ul className="mt-2 space-y-2">
+            {guaranteed.map((s) => (
+              <li key={s.id}>
+                <span className="font-medium text-stone-800">✓ {s.name}</span>
+                {!s.is_target && <span className="text-stone-500"> (not selected)</span>}
+                <p className="whitespace-pre-wrap text-stone-600">{s.funding_guarantee}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {flagged.length > 0 && (
+        <details className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm" open={flagged.some((s) => s.is_target && s.funding_level === "concern")}>
+          <summary className="cursor-pointer font-medium text-amber-900">
+            Funding concerns: {flagged.filter((s) => s.funding_level === "concern").length} schools · {flagged.filter((s) => s.funding_level === "minor").length} minor
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {flagged.map((s) => (
+              <li key={s.id}>
+                <span className="font-medium text-stone-800">{s.funding_level === "concern" ? "⚠ " : "ⓘ "}{s.name}</span>
+                {!s.is_target && <span className="text-stone-500"> (not selected)</span>}
+                <p className="whitespace-pre-wrap text-stone-600">{s.funding_note}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="mt-4 flex gap-2">
         <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Add a school, e.g. UCLA or Columbia University"
           onKeyDown={(e) => e.key === "Enter" && name.trim() && add()} />
@@ -55,4 +94,13 @@ export default function TargetSchools() {
       <div className="mt-2"><ErrorNote error={error} /></div>
     </Card>
   );
+}
+
+/** ⚠ for an evidence-based funding concern, ⓘ for minor (budget pressure, PhD funding protected). */
+function FundingMark({ level, onDark }: { level: School["funding_level"]; onDark: boolean }) {
+  if (level === "concern")
+    return <span title="Funding concern: see details below" className={`ml-1.5 rounded px-1 text-xs font-semibold ${onDark ? "bg-amber-300 text-amber-950" : "bg-amber-100 text-amber-900"}`}>⚠ funding</span>;
+  if (level === "minor")
+    return <span title="Minor: university budget pressure, PhD funding protected" className={`ml-1.5 text-xs ${onDark ? "text-indigo-200" : "text-stone-400"}`}>ⓘ</span>;
+  return null;
 }

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUser
-from app.api.schemas import JobOut, SchoolConfirmIn, SchoolCreateIn, SchoolOut, SchoolTargetIn
+from app.api.schemas import JobOut, SchoolConfirmIn, SchoolCreateIn, SchoolFundingIn, SchoolOut, SchoolTargetIn
 from app.config import get_settings
 from app.db.models import Job, Professor, School
 from app.llm import get_llm
@@ -59,6 +59,18 @@ def set_target(school_id: uuid.UUID, body: SchoolTargetIn, db: DB, user: Current
     if school is None or school.user_id != user.id:
         raise HTTPException(404)
     school.is_target = body.is_target
+    db.commit()
+    return school
+
+
+@router.patch("/schools/{school_id}/funding", response_model=SchoolOut)
+def set_funding(school_id: uuid.UUID, body: SchoolFundingIn, db: DB, user: CurrentUser):
+    """Record what's known about PhD funding at this school (shown on My profile)."""
+    school = db.get(School, school_id)
+    if school is None or school.user_id != user.id:
+        raise HTTPException(404)
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(school, k, v)
     db.commit()
     return school
 

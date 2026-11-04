@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Application, ApplicationStep, Professor, User
+from app.db.models import Application, ApplicationStep, Professor, School, User
 
 # (label, days before the deadline it should be done; None = due with the deadline)
 DEFAULT_STEPS: list[tuple[str, int | None]] = [
@@ -91,10 +91,12 @@ ACTIVE = ("planning", "in_progress")
 
 
 def todo(db: Session, user: User, today: date | None = None, limit: int = 15) -> list[tuple[ApplicationStep, Application, date | None]]:
-    """Unfinished steps across active applications, most urgent first."""
+    """Unfinished steps across active applications (selected schools, not dropped on Compare), most urgent first."""
     today = today or date.today()
     apps = db.scalars(
-        select(Application).where(Application.user_id == user.id, Application.status.in_(ACTIVE))
+        select(Application).join(School)
+        .where(Application.user_id == user.id, Application.status.in_(ACTIVE), School.is_target,
+               Application.decision != "drop")
         .options(selectinload(Application.steps), selectinload(Application.school))
     ).all()
     items = [(s, a, due(s, a)) for a in apps for s in a.steps if not s.done]

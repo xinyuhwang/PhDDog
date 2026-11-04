@@ -68,6 +68,11 @@ class School(TimestampMixin, Base):
     suggestions: Mapped[list] = mapped_column(JSONB, default=list)
     # The user plans to apply here (chosen on My profile).
     is_target: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Evidence-based PhD funding outlook: none (nothing found) | minor (budget pressure, PhD funding protected) | concern
+    funding_level: Mapped[str | None] = mapped_column(String)
+    funding_note: Mapped[str | None] = mapped_column(Text)  # what was found, with dates and source links
+    # A stated PhD funding guarantee, e.g. "5 years (stipend + tuition)", with its source. Independent of funding_level.
+    funding_guarantee: Mapped[str | None] = mapped_column(Text)
 
     professors: Mapped[list["Professor"]] = relationship(back_populates="school")
 
@@ -267,6 +272,38 @@ class Outreach(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, default="sent")
     follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class OutreachTask(TimestampMixin, Base):
+    """Something to do for a professor (or in general): steps to tick off, links, and what to mention."""
+
+    __tablename__ = "outreach_tasks"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    professor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("professors.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(Text)
+    steps: Mapped[list] = mapped_column(JSONB, default=list)  # [{"text": str, "done": bool}]
+    links: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": str, "url": str}]
+    notes: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class Venue(TimestampMixin, Base):
+    """A conference or journal the user may submit a paper to, ranked, with why it fits and its next deadline."""
+
+    __tablename__ = "venues"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    rank: Mapped[int] = mapped_column(Integer, default=0)
+    name: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String, default="conference")  # conference | journal | workshop
+    tier: Mapped[str | None] = mapped_column(String)  # e.g. "top", "strong", "solid"
+    deadline: Mapped[date | None] = mapped_column(Date)
+    deadline_text: Mapped[str | None] = mapped_column(Text)  # "expected ~Mar 2027", "rolling"
+    why: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    links: Mapped[list] = mapped_column(JSONB, default=list)  # [{"label": str, "url": str}]
+    # considering | target | submitted | accepted | rejected | dropped
+    status: Mapped[str] = mapped_column(String, default="considering", server_default="considering")
 
 
 class Application(TimestampMixin, Base):

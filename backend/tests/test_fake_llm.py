@@ -60,6 +60,19 @@ def test_extract_recruiting_and_contact_policy():
     assert x.email == "myatskar@cis.upenn.edu"
 
 
+@pytest.mark.parametrize("sentence, cycle", [
+    ("The PhD application cycle for 2027-28 start is open.", "Fall 2027"),
+    ("For the academic year 2027/2028 the HXI lab IS looking for new Prospective Ph.D. Students.", "Fall 2027"),
+    ("We are recruiting PhD students for 2027–2028.", "Fall 2027"),
+    # A date range isn't an academic year.
+    ("From 2020-2024 we were recruiting PhD students in vision.", None),
+])
+def test_extract_cycle_from_academic_year(sentence, cycle):
+    page = PageText(url="https://x.edu/~jd/", text=sentence)
+    [claim] = [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "recruiting"]
+    assert claim.cycle == cycle
+
+
 def test_extract_cycle_takes_latest_year():
     page = PageText(url="https://j.github.io/", text=(
         "I am looking for PhD students for the Fall 2025 application / Fall 2026 start cycle. "
@@ -100,6 +113,14 @@ def test_postdoc_statements_are_not_phd_recruiting():
     assert [(c.kind, c.claim) for c in claims] == [("recruiting", "explicitly_recruiting")]
 
 
+def test_visiting_student_statements_are_not_phd_recruiting():
+    page = PageText(url="https://x.edu/joining.html", text=(
+        "Sorry, I am generally not taking any visiting students from outside of UW. "
+        "We are not accepting visiting scholars this year."
+    ))
+    assert not [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "recruiting"]
+
+
 @pytest.mark.parametrize("sentence", [
     "Select me as a potential advisor in your application.",
     "If you are interested in our research group, please list Eric Eaton as a prospective advisor in your PhD application and statement of purpose.",
@@ -134,6 +155,17 @@ def test_lab_contact_page_roles():
 def test_recruiting_phrasings(sentence, expected):
     claims = [c for c in llm.extract_profile([PageText(url="https://x.edu/~a/", text=sentence)], "Ann Lee", "x.edu").claims
               if c.kind == "recruiting"]
+    assert [c.claim for c in claims] == [expected]
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    ("If you plan to apply to the PhD program in the CSE department and are interested in working with me, please email me.",
+     "welcomes_email"),
+    ("Please apply to the PhD program and list me as a potential advisor.", "apply_via_program"),
+])
+def test_conditional_apply_with_email_invite(sentence, expected):
+    page = PageText(url="https://x.edu/~jd/", text=sentence)
+    claims = [c for c in llm.extract_profile([page], "Jane Doe", "x.edu").claims if c.kind == "contact_policy"]
     assert [c.claim for c in claims] == [expected]
 
 

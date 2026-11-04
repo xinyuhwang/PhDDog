@@ -64,9 +64,14 @@ export function FitBadge({ label, reason }: { label?: string; reason?: string })
 
 export function RecruitingBadge({ status, cycle, stale }: { status: string; cycle?: string | null; stale?: boolean }) {
   const [tone, text] = RECRUITING[status] ?? ["gray", status];
+  // A recruiting statement that names no cycle doesn't confirm openings for the target cycle.
+  const undated = status === "explicitly_recruiting" && !cycle;
   return (
     <span className="inline-flex flex-wrap gap-1">
-      <Badge tone={stale ? "yellow" : tone}>{text}{cycle ? ` · ${cycle}` : ""}</Badge>
+      <Badge tone={stale ? "yellow" : tone}
+        title={undated ? "Their statement names no year or cycle, so it doesn't confirm openings for your target cycle" : undefined}>
+        {text}{cycle ? ` · ${cycle}` : undated ? " · undated" : ""}
+      </Badge>
       {stale && <Badge tone="yellow" title="The cycle mentioned is earlier than your target cycle">Stale</Badge>}
     </span>
   );

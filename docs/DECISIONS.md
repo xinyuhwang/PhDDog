@@ -330,6 +330,14 @@ CSE. The 12 non-CS programs are dropped but can be restored.
 professors with Fall 2027 openings. Stanford CS and BU CS were re-scored as
 those schools' only options.
 
+**Update (Oct 29).** The UW BIME exception is withdrawn because of funding concerns, so the policy is now CS departments only, including at UW (Allen School CSE). The BIME application is marked dropped, and BIME-only faculty are flagged in their notes.
+
+**Update (Oct 7).** The Applications page now follows the same filter.
+Programs marked "drop" on Compare, and programs at schools unselected on My
+profile, are left out of "Do next", the totals and the main cards. They sit
+in a collapsed section, with their checklist progress kept, so restoring one
+on Compare or My profile brings it back.
+
 ---
 
 ## Analysis and UI
@@ -367,6 +375,82 @@ at the top.
   professors whose match note says "closest", "direct match/overlap",
   "strongest", "very strong" or "best … match". They're marked ★.
 - **The row action is "+ paper"**; the "Open →" link was removed.
+
+### D23. Outreach to-do tasks (Oct 9)
+
+**Decision.** A "To do" section under the log on the Outreach page,
+backed by a new `outreach_tasks` table and `/outreach-tasks` endpoints.
+- **What a task has:** a title, an optional professor, a due date, checklist
+  steps, labelled links, notes ("what to mention") and a done flag.
+- **Layout:** open tasks are grouped by professor, with a "General" group last
+  and done tasks collapsed at the bottom.
+- **On the professor page:** that professor's open tasks are also shown,
+  linking back to the full list.
+
+**Why.** Replies brought multi-step instructions (Zhou's BodyMaps warm-up,
+Yang's take-home test and interest form) that didn't fit the log's single
+"notes" field.
+
+**Also fixed (extraction).**
+- "Not taking visiting students" no longer counts as not recruiting PhD
+  students.
+- "If you plan to apply …, please email me" now counts as welcoming email
+  instead of "apply via program".
+- **Academic years count as cycles (Oct 11).** "2027-28", "2027–2028" and
+  "2027/2028" are read as Fall 2027. Only consecutive years count, so date
+  ranges like "2020-2024" are ignored. "The PhD application cycle … is open"
+  counts as recruiting.
+- **The UI says when a statement is undated.** A recruiting statement that
+  names no cycle shows as "Recruiting · undated", because it doesn't confirm
+  the target cycle.
+
+### D24. Publishing page for venue targets (Oct 27)
+
+**Decision.** A "Publishing" page (nav, after Applications) lists ranked
+venues: rank, name, conference/journal/workshop, tier, next deadline with a
+countdown, why it fits, notes, links, and a status (considering → target →
+submitted → accepted/rejected/dropped). It's backed by a `venues` table and
+`/venues` endpoints, editable in the app.
+
+**Why.** The user is choosing where to submit the liver tumor paper. The
+choice weighs prestige, fit with target advisors (e.g. Zongwei Zhou's main
+venues) and deadlines relative to PhD applications, and it needs to stay
+visible and updatable.
+
+### D25. Funding outlook labels per school (Nov 3)
+
+**Decision.** Each school can carry two independent fields, set only from
+cited 2025–26 sources (news reports, university pages):
+- **`funding_level`:**
+  - `concern`, shown as ⚠ funding: e.g. PhD admission cuts, removed funding
+    guarantees, or large deficits affecting doctoral programs;
+  - `minor`, shown as ⓘ: budget pressure while PhD funding stays protected;
+  - `none`, with no label.
+- **`funding_guarantee`**, shown as ✓ funded: a stated PhD funding
+  guarantee, such as JHU's or Stanford's 5 years, or UW's 3 years.
+
+My profile shows both on the school chips and lists the evidence.
+Applications keep a matching note.
+
+**Why.** The user won't apply to programs with funding problems (federal
+cuts in 2025–26). They wanted the risk, and any guarantee, visible where
+schools are chosen. They didn't want a column on Compare.
+
+**Rule.** A missing label means nothing was found, not that funding is
+safe. Vague wording ("most students are funded") doesn't count as a
+guarantee.
+
+### D26. Configurable API port; worker restarts (Oct 11 – Nov 2)
+
+**Decision.**
+- **`API_PORT`:** a `.env` setting (default 8000) that the frontend
+  follows. The user's machine uses 8001, because another project's
+  crash-looping containers take 8000.
+- **Worker restarts:** the background worker exits if its database
+  connection drops (e.g. after Docker restarts), and must then be restarted
+  with `docker compose up -d worker`.
+
+**Open.** The worker should reconnect and retry instead of exiting.
 
 ---
 

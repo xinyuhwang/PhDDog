@@ -102,6 +102,19 @@ OBFUSCATED_EMAIL_RE = re.compile(
     r"([\w.+-]+)\s*(?:\[at\]|\(at\)|\sat\s)\s*([\w-]+(?:\s*(?:\[dot\]|\(dot\)|\sdot\s|\.)\s*[\w-]+)+)", re.IGNORECASE
 )
 CYCLE_RE = re.compile(r"\b(Fall|Spring|Autumn|Winter|Summer)\s+(20\d{2})\b", re.IGNORECASE)
+# Academic years ("2027-28", "2027–2028", "2027/2028") start in the fall of the first year.
+ACADEMIC_YEAR_RE = re.compile(r"\b(20\d{2})\s*[-–/]\s*(?:20)?(\d{2})\b")
+
+
+def find_cycle(sentence: str) -> str | None:
+    """The latest admission cycle a sentence names: "Fall 2027", or an academic year read as its fall."""
+    found = [(season.title(), int(year)) for season, year in CYCLE_RE.findall(sentence)]
+    # Only consecutive years count, so date ranges like "2020-2024" aren't read as cycles.
+    found += [("Fall", int(a)) for a, b in ACADEMIC_YEAR_RE.findall(sentence) if (int(a) + 1) % 100 == int(b)]
+    if not found:
+        return None
+    season, year = max(found, key=lambda c: c[1])
+    return f"{season} {year}"
 
 
 def _blocks(text: str) -> list[str]:
@@ -299,9 +312,14 @@ class FakeLLM:
             r"[^.]{0,120}\b(ph\.?\s?d|students?|postdocs?)\b",
             re.I,
         )
+        # "The PhD application cycle for 2027-28 start is open" on their own page: taking applications.
+        open_cycle = re.compile(
+            r"\bph\.?\s?d\.?\s+(?:application|admissions?)\s+(?:cycle|season)\b[^.]{0,60}\b(?:is|are)\s+(?:now\s+)?open\b", re.I
+        )
         # Recruiting statements about other roles say nothing about PhD openings.
         other_roles = re.compile(
-            r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*)\b", re.I
+            r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*|"
+            r"visiting\s+(?:\w+\s+)?(?:students?|scholars?|researchers?))\b", re.I
         )
         phd_re = re.compile(r"\b(ph\.?\s?d|doctoral|graduate students?)\b", re.I)
         # "our PhD students" are the lab's current members, not applicants.
@@ -338,11 +356,7 @@ class FakeLLM:
             for s in sentences(p.text):
                 if len(s) > 600:
                     continue
-                cycles = CYCLE_RE.findall(s)
-                cycle = None
-                if cycles:
-                    season, year = max(cycles, key=lambda c: int(c[1]))
-                    cycle = f"{season.title()} {year}"
+                cycle = find_cycle(s)
 
                 recruit = None
                 # "Openings will be rare" says neither yes nor no.
@@ -351,7 +365,7 @@ class FakeLLM:
                     pass
                 elif not_recruiting.search(s):
                     recruit = "not_recruiting"
-                elif recruiting.search(s):
+                elif recruiting.search(s) or open_cycle.search(s):
                     recruit = "recruits_generally" if general.search(s) and not cycle else "explicitly_recruiting"
                 # "Apply and list me as a potential advisor" invites PhD applications: open to students, undated.
                 if recruit is None and name_me_as_advisor.search(s) and not (other_roles.search(s) and not phd.search(s)):
@@ -361,10 +375,14 @@ class FakeLLM:
                     out.claims.append(Claim(kind="recruiting", claim=recruit, cycle=cycle, quote=s, source_url=p.url))
 
                 about_other_roles = bool(other_roles.search(s) and not phd.search(s))
+                # "If you plan to apply to the program …, please email me" invites email; applying is the condition.
+                conditional_apply = re.search(r"\bif you\b[^.]{0,40}\bapply", s, re.I) and welcomes.search(s)
                 for policy, pattern in (
                     ("do_not_email", do_not_email), ("apply_via_program", apply_program),
                     ("apply_via_program", name_me_as_advisor), ("welcomes_email", welcomes),
                 ):
+                    if conditional_apply and policy == "apply_via_program":
+                        continue
                     if not about_other_roles and pattern.search(s):
                         if ("contact_policy", s) not in seen:
                             seen.add(("contact_policy", s))

@@ -183,6 +183,35 @@ export type Draft = {
   created_at: string;
 };
 
+export type Venue = {
+  id: string;
+  name: string;
+  rank: number;
+  kind: "conference" | "journal" | "workshop";
+  tier: string | null;
+  deadline: string | null;
+  deadline_text: string | null;
+  why: string | null;
+  notes: string | null;
+  links: { label: string; url: string }[];
+  status: "considering" | "target" | "submitted" | "accepted" | "rejected" | "dropped";
+  updated_at: string;
+};
+
+export type OutreachTask = {
+  id: string;
+  title: string;
+  professor_id: string | null;
+  professor_name: string | null;
+  school_name: string | null;
+  steps: { text: string; done: boolean }[];
+  links: { label: string; url: string }[];
+  notes: string | null;
+  due_date: string | null;
+  done: boolean;
+  created_at: string;
+};
+
 export type Outreach = {
   id: string;
   professor_id: string;
@@ -211,6 +240,9 @@ export type School = {
   confirmed: boolean;
   suggestions: SchoolSuggestion[];
   is_target: boolean;
+  funding_level: "none" | "minor" | "concern" | null;
+  funding_note: string | null;
+  funding_guarantee: string | null;
   professor_count: number;
 };
 
@@ -236,6 +268,7 @@ export type Application = {
   apply_url: string | null;
   requirements: Record<string, string>;
   status: string;
+  decision: string;
   notes: string | null;
   steps: AppStep[];
   done: number;
@@ -245,7 +278,7 @@ export type Application = {
   due_soon: number;
   days_left: number | null;
   next_step: AppStep | null;
-  faculty: { id: string; name: string; recruiting_status: string; contact_policy: string }[];
+  faculty: { id: string; name: string; recruiting_status: string; recruiting_cycle: string | null; recruiting_stale: boolean; contact_policy: string }[];
 };
 
 export type TodoItem = {
