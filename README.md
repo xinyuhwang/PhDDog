@@ -42,18 +42,31 @@ personal site       your resume       connection points    follow-ups
    connections, send it from your own inbox, and log it. Track status
    (sent → replied → meeting) and follow-up dates.
 
-## Features (MVP)
+## Features
 
-- [ ] Resume upload → structured research profile
-- [ ] Free-form "Name, School" input with a parse preview
-- [ ] Automatic homepage lookup and profile extraction (up to 10 schools)
-- [ ] Recruiting status + contact policy, with evidence
-- [ ] Interest-based screening with explanations
-- [ ] Paper intake from PDFs and web links
-- [ ] Per-paper structured summaries
-- [ ] Evidence-backed connection points
-- [ ] Personalized email drafts with saved versions
-- [ ] Outreach tracker with follow-up reminders
+Built, and runs fully offline. Items marked *(offline: rule-based)* use
+placeholder logic until a Claude API key is configured.
+
+- [x] Resume upload → research profile (versioned)
+- [x] Free-form "Name, School" input with a parse preview; school-name
+      resolution (catalog → saved schools → OpenAlex)
+- [x] Homepage lookup, polite crawling and profile extraction
+- [x] Recruiting status and contact policy from evidence with quotes and
+      history. Cycles are recognized, including academic years like
+      "2027-28"; undated statements are labelled "undated".
+- [x] User-submitted evidence (a URL, optionally with the exact sentence)
+- [ ] Interest-based screening *(offline: rule-based; research fit hidden)*
+- [x] Paper intake from PDFs and web links
+- [x] Paper summaries and connection points *(offline: rule-based; analyses
+      written in a Claude session can be imported with verified quotes)*
+- [x] Email drafts with saved versions *(offline: template)*; outreach log
+      with follow-ups
+- [x] Outreach to-do tasks (steps, links, notes) per professor
+- [x] Application tracker: deadlines, an 11-step checklist, "Do next"
+- [x] Compare page: fit, tier and decision for each program
+- [x] Publishing page: ranked conference and journal targets with deadlines
+- [x] Funding outlook per school (⚠ concern, ⓘ minor, ✓ funded) on My
+      profile
 
 ## Tech stack
 
@@ -94,7 +107,9 @@ docker compose up -d --build
 ```
 
 - App: <http://localhost:3000> (set `FRONTEND_PORT` in `.env` if 3000 is taken)
-- API docs: <http://localhost:8000/docs>
+- API docs: <http://localhost:8000/docs> (set `API_PORT` in `.env` if 8000 is taken; the frontend follows it)
+- The background worker must be running (`docker compose ps`). If it exited
+  after a database restart, run `docker compose up -d worker`.
 
 In offline mode, homepages can't be searched for, so include the URL in the
 entry (`Name, School https://...`) or paste it when the app asks. A few

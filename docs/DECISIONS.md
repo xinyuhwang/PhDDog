@@ -376,19 +376,6 @@ at the top.
   "strongest", "very strong" or "best … match". They're marked ★.
 - **The row action is "+ paper"**; the "Open →" link was removed.
 
-### D24. Publishing page for venue targets (Oct 27)
-
-**Decision.** A "Publishing" page (nav, after Applications) lists ranked
-venues: rank, name, conference/journal/workshop, tier, next deadline with a
-countdown, why it fits, notes, links, and a status (considering → target →
-submitted → accepted/rejected/dropped). It's backed by a `venues` table and
-`/venues` endpoints, editable in the app.
-
-**Why.** The user is choosing where to submit the liver tumor paper. The
-choice weighs prestige, fit with target advisors (e.g. Zongwei Zhou's main
-venues) and deadlines relative to PhD applications, and it needs to stay
-visible and updatable.
-
 ### D23. Outreach to-do tasks (Oct 9)
 
 **Decision.** A "To do" section under the log on the Outreach page,
@@ -416,6 +403,54 @@ Yang's take-home test and interest form) that didn't fit the log's single
 - **The UI says when a statement is undated.** A recruiting statement that
   names no cycle shows as "Recruiting · undated", because it doesn't confirm
   the target cycle.
+
+### D24. Publishing page for venue targets (Oct 27)
+
+**Decision.** A "Publishing" page (nav, after Applications) lists ranked
+venues: rank, name, conference/journal/workshop, tier, next deadline with a
+countdown, why it fits, notes, links, and a status (considering → target →
+submitted → accepted/rejected/dropped). It's backed by a `venues` table and
+`/venues` endpoints, editable in the app.
+
+**Why.** The user is choosing where to submit the liver tumor paper. The
+choice weighs prestige, fit with target advisors (e.g. Zongwei Zhou's main
+venues) and deadlines relative to PhD applications, and it needs to stay
+visible and updatable.
+
+### D25. Funding outlook labels per school (Nov 3)
+
+**Decision.** Each school can carry two independent fields, set only from
+cited 2025–26 sources (news reports, university pages):
+- **`funding_level`:**
+  - `concern`, shown as ⚠ funding: e.g. PhD admission cuts, removed funding
+    guarantees, or large deficits affecting doctoral programs;
+  - `minor`, shown as ⓘ: budget pressure while PhD funding stays protected;
+  - `none`, with no label.
+- **`funding_guarantee`**, shown as ✓ funded: a stated PhD funding
+  guarantee, such as JHU's or Stanford's 5 years, or UW's 3 years.
+
+My profile shows both on the school chips and lists the evidence.
+Applications keep a matching note.
+
+**Why.** The user won't apply to programs with funding problems (federal
+cuts in 2025–26). They wanted the risk, and any guarantee, visible where
+schools are chosen. They didn't want a column on Compare.
+
+**Rule.** A missing label means nothing was found, not that funding is
+safe. Vague wording ("most students are funded") doesn't count as a
+guarantee.
+
+### D26. Configurable API port; worker restarts (Oct 11 – Nov 2)
+
+**Decision.**
+- **`API_PORT`:** a `.env` setting (default 8000) that the frontend
+  follows. The user's machine uses 8001, because another project's
+  crash-looping containers take 8000.
+- **Worker restarts:** the background worker exits if its database
+  connection drops (e.g. after Docker restarts), and must then be restarted
+  with `docker compose up -d worker`.
+
+**Open.** The worker should reconnect and retry instead of exiting.
 
 ---
 
