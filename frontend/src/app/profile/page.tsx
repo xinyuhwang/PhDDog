@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import AdmissionChances from "@/components/AdmissionChances";
 import TargetSchools from "@/components/TargetSchools";
 import { Badge, Button, Card, ErrorNote, inputClass } from "@/components/ui";
 import { api, type Profile } from "@/lib/api";
@@ -14,6 +15,8 @@ export default function ProfilePage() {
   const [projectNotes, setProjectNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when the school selection or profile changes, so the evaluation section refetches.
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     if (profile) {
@@ -29,6 +32,7 @@ export default function ProfilePage() {
     setError(null);
     try {
       setData(await fn());
+      setRevision((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -39,7 +43,7 @@ export default function ProfilePage() {
   const sp = profile?.structured_profile;
   return (
     <div className="space-y-6">
-    <TargetSchools />
+    <TargetSchools onChange={() => setRevision((n) => n + 1)} />
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="space-y-6">
         <Card title="Resume">
@@ -98,6 +102,7 @@ export default function ProfilePage() {
         )}
       </Card>
     </div>
+    <AdmissionChances key={revision} />
     </div>
   );
 }

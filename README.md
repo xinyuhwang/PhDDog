@@ -67,6 +67,8 @@ placeholder logic until a Claude API key is configured.
 - [x] Publishing page: ranked conference and journal targets with deadlines
 - [x] Funding outlook per school (⚠ concern, ⓘ minor, ✓ funded) on My
       profile
+- [x] Admission chances per selected program, with evidence for each reason
+      *(needs Claude; session-written evaluations can be imported)*
 
 ## Tech stack
 

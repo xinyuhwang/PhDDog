@@ -73,6 +73,9 @@ class School(TimestampMixin, Base):
     funding_note: Mapped[str | None] = mapped_column(Text)  # what was found, with dates and source links
     # A stated PhD funding guarantee, e.g. "5 years (stipend + tuition)", with its source. Independent of funding_level.
     funding_guarantee: Mapped[str | None] = mapped_column(Text)
+    # What recent admits in matching labs looked like (papers, master's, prior contact), with source links.
+    # Input to the admission evaluation; written by the user or by Claude from public pages.
+    admit_note: Mapped[str | None] = mapped_column(Text)
 
     professors: Mapped[list["Professor"]] = relationship(back_populates="school")
 
@@ -349,6 +352,30 @@ class ApplicationStep(TimestampMixin, Base):
     due_date: Mapped[date | None] = mapped_column(Date)
 
     application: Mapped[Application] = relationship(back_populates="steps")
+
+
+class AdmissionAssessment(TimestampMixin, Base):
+    """An evaluation of the user's chances at one program (My profile, docs/DESIGN.md §4.11).
+
+    Written by Claude, never by the offline rules. Every reason carries its evidence, checked on import.
+    """
+
+    __tablename__ = "admission_assessments"
+    __table_args__ = (UniqueConstraint("school_id", "application_id"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    application_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("applications.id", ondelete="CASCADE"))
+    rating: Mapped[str] = mapped_column(String)  # long_shot | reach | target | likely
+    summary: Mapped[str] = mapped_column(Text)
+    # [{text, kind: profile|program|faculty|admit_pattern|funding, evidence, source_url}]
+    reasons: Mapped[list] = mapped_column(JSONB, default=list)
+    gap: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[str | None] = mapped_column(Text)
+    profile_version: Mapped[int] = mapped_column(Integer)  # profile the evaluation was made from
+    # Hash of the school and program facts it used (funding, admit note, faculty, requirements), to spot changes.
+    inputs_key: Mapped[str] = mapped_column(String)
+    assessed_by: Mapped[str] = mapped_column(String)  # claude | claude-session
 
 
 class Job(TimestampMixin, Base):

@@ -452,6 +452,39 @@ guarantee.
 
 **Open.** The worker should reconnect and retry instead of exiting.
 
+### D27. Admission chances on My profile (Nov 10)
+
+**Decision.** The last section of My profile rates each selected program:
+- **Ratings are categories:** Long shot, Reach, Target or Likely. There are
+  no percentages, because no reliable admit data supports a number.
+- **Every reason carries evidence of one of five kinds**, checked when it
+  is saved:
+  - `profile`: a word-for-word quote of the user's resume, statement or
+    notes;
+  - `faculty`: names a professor saved for that school;
+  - `program`, `admit_pattern` or `funding`: a fact with a source link.
+
+  Reasons that fail the check are rejected on import and dropped from model
+  output.
+- **Each card also has a main gap and one next step.** A summary above the
+  cards counts ratings and warns when no program is Likely.
+- **Runs only on request** ("Evaluate my chances"), as a background job.
+- **Marked out of date** when the profile version or the program's inputs
+  change. The inputs are funding, the school's admit note, faculty and
+  requirements, compared by a hash.
+- **Admit notes:** each school has an `admit_note` describing what recent
+  admits in matching labs looked like, with sources. It is an input to the
+  evaluation.
+
+**Why.** The user wanted their chances, with reasons, after choosing schools
+and uploading materials. Grounding each reason keeps the judgment checkable.
+
+**Rule.** The offline rules never produce a rating (D16): the run button is
+disabled and the section says it needs Claude. Evaluations written by Claude
+in a session can be imported (`PUT /assessments`) under the same evidence
+check and are labeled "Claude (session)". The Claude provider's
+`assess_admission` is not implemented yet, like its other tasks (D7).
+
 ---
 
 ## Not doing (and why)

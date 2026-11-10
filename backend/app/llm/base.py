@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from app.llm.schemas import (
+    AssessmentOut,
     CandidateOut,
     ConnectionOut,
     EmailOut,
@@ -9,6 +10,7 @@ from app.llm.schemas import (
     PageText,
     PaperSummary,
     ParsedEntry,
+    ProgramContext,
     SchoolInfo,
     ScreenOutput,
     StructuredProfile,
@@ -57,4 +59,11 @@ class LLM(Protocol):
         user_name: str, tone: str, ask: str,
     ) -> EmailOut:
         """connections: (paper_title, connection)."""
+        ...
+
+    def assess_admission(
+        self, profile: StructuredProfile, materials: str, programs: list[ProgramContext],
+    ) -> list[AssessmentOut]:
+        """One evaluation per program, in order. A judgment task: providers without a real model
+        raise NotImplementedError rather than guess (docs/DESIGN.md §4.11)."""
         ...

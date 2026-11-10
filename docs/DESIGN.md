@@ -472,6 +472,40 @@ One row per application at a **target school** (D19):
 - **On My profile:** the school chips show the labels, and two expandable
   boxes list the evidence.
 
+### 4.11 Admission chances (My profile, last section)
+
+- **What it shows:** one card per program still in play at each selected
+  school. Each card has:
+  - a rating: Long shot, Reach, Target or Likely, never a percentage;
+  - a one-line summary;
+  - 1–5 reasons, each with its evidence;
+  - the main gap and one next step.
+
+  A summary above the cards counts the ratings and warns when no program is
+  Likely.
+- **Inputs:**
+  - the structured profile and the user's own materials (resume, research
+    statement, project notes);
+  - each application's requirements and notes;
+  - the school's funding fields and `admit_note` (what recent admits looked
+    like, with sources);
+  - the faculty saved for the school, with recruiting status and contact
+    policy.
+- **Evidence check:**
+  - `profile` reasons must quote the materials word for word (at least 15
+    characters, whitespace-normalized);
+  - `faculty` reasons must name a saved professor at that school;
+  - `program`, `admit_pattern` and `funding` reasons need a source URL.
+
+  Imports that fail are rejected. Model output keeps only the reasons that
+  pass.
+- **Running:** "Evaluate my chances" queues an `assess_admission` job. It
+  needs a judgment-capable provider (Claude); offline, the button is
+  disabled. Session-written evaluations can be imported with
+  `PUT /assessments`.
+- **Staleness:** a card is marked out of date when the profile version
+  changes, or when a hash of the program's inputs no longer matches.
+
 ---
 
 ## 5. Data model
@@ -493,7 +527,8 @@ schools
   user_id, name, aliases[], primary_domain, website, confirmed (bool),
   suggestions (jsonb: OpenAlex candidates when unrecognized), is_target (bool),
   funding_level (none | minor | concern), funding_note (text, with sources),
-  funding_guarantee (text: stated PhD funding guarantee + source)
+  funding_guarantee (text: stated PhD funding guarantee + source),
+  admit_note (text: what recent admits looked like, with sources)
 
 professors
   school_id, name, input_raw (text the user typed),
@@ -575,6 +610,13 @@ venues
   deadline, deadline_text, why, notes, links (jsonb),
   status (considering | target | submitted | accepted | rejected | dropped)
 
+admission_assessments
+  user_id, school_id, application_id (nullable),
+  rating (long_shot | reach | target | likely), summary,
+  reasons (jsonb [{text, kind, evidence, source_url}]), gap, action,
+  profile_version, inputs_key (hash of the program's inputs),
+  assessed_by (claude | claude-session); unique (school_id, application_id)
+
 jobs
   kind, payload (jsonb), status (queued | running | done | failed),
   attempts, error, started_at, finished_at
@@ -615,6 +657,10 @@ jobs
 | `GET` | `/compare` | Compare-page rows for target schools |
 | `GET/POST/PATCH/DELETE` | `/outreach-tasks` (`?professor_id=`) | Outreach to-do tasks |
 | `GET/POST/PATCH/DELETE` | `/venues` | Publishing targets |
+| `GET` | `/assessments` | Admission chances per selected program, with staleness |
+| `POST` | `/assessments/run` | Queue an evaluation (409 offline) |
+| `PUT` | `/assessments` | Import an evaluation; evidence is checked |
+| `PATCH` | `/schools/{id}/admit-note` | Set a school's admit note |
 | `PATCH` | `/schools/{id}/funding` | Set funding level, note and guarantee (only the fields sent change) |
 | `GET` | `/jobs`, `/jobs/{id}` | Background job status |
 

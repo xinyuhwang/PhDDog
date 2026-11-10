@@ -45,7 +45,7 @@ def claim_next(db: Session) -> Job | None:
 
 def run(db: Session, job: Job) -> None:
     # Import here so every @handler is registered before lookup.
-    from app.services import papers, professors, screen  # noqa: F401
+    from app.services import assessments, papers, professors, screen  # noqa: F401
 
     try:
         _handlers[job.kind](db, job.payload)

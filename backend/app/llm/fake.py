@@ -517,6 +517,12 @@ class FakeLLM:
         ] if p)
         return EmailOut(subject=f"[FAKE] Prospective PhD student interested in your work at {school}", body=body)
 
+    # --- Admission evaluation ---------------------------------------------------------
+
+    def assess_admission(self, profile, materials, programs):
+        # Keyword rules can't judge admission chances, and a made-up rating would read as real.
+        raise NotImplementedError("Evaluating admission chances needs Claude (LLM_PROVIDER=claude).")
+
 
 # --- module helpers --------------------------------------------------------------------
 
