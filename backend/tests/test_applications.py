@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -65,3 +66,21 @@ def test_compare(database):
     client.patch(f"/applications/{a['id']}", json={"decision": "drop"})
     assert not any(t["application_id"] == a["id"] for t in client.get("/applications/todo?limit=500").json())
     assert next(x for x in client.get("/applications").json() if x["id"] == a["id"])["decision"] == "drop"
+
+
+def test_compare_rank_puts_best_fit_and_chance_first():
+    from app.api.applications import CompareRow, compare_rank
+
+    def row(name, fit, chance, decision="undecided"):
+        return CompareRow(
+            id=uuid.uuid4(), school_id=uuid.uuid4(), school_name=name, program="CS PhD", program_type="Computer Science",
+            deadline=None, days_left=None, status="planning", fit_score=fit, tier=None, chance=chance, reason=None,
+            gaps=None, decision=decision, assessment_by=None, faculty=[], n_faculty=0, n_in_program=0, n_recruiting=0,
+            n_target_cycle=0, n_not_recruiting=0,
+        )
+
+    rows = [row("Reach fit 5", 5, "reach"), row("Likely fit 4", 4, "likely"), row("Target fit 4", 4, "target"),
+            row("Long shot fit 5", 5, "long_shot"), row("Unrated", None, None), row("Dropped", 5, "likely", "drop")]
+    # 4+4=8, 4+3=7, 5+2=7 (tie: better fit first), 5+1=6, 0, then dropped.
+    assert [r.school_name for r in sorted(rows, key=compare_rank)] == [
+        "Likely fit 4", "Reach fit 5", "Target fit 4", "Long shot fit 5", "Unrated", "Dropped"]

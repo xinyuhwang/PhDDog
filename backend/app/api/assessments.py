@@ -20,6 +20,7 @@ class AssessmentRow(BaseModel):
     school_name: str
     application_id: uuid.UUID | None
     program: str | None
+    fit_score: int | None = None  # the program's research fit (1–5) from Compare, for ordering
     rating: AdmissionRating | None = None  # None = not evaluated yet
     summary: str | None = None
     reasons: list[AssessmentReason] = []
@@ -55,7 +56,8 @@ def list_assessments(db: DB, user: CurrentUser):
     rows = []
     for school, app in svc.evaluated_programs(db, user):
         row = AssessmentRow(school_id=school.id, school_name=school.name,
-                            application_id=app.id if app else None, program=app.program if app else None)
+                            application_id=app.id if app else None, program=app.program if app else None,
+                            fit_score=app.fit_score if app else None)
         if a := saved.get((school.id, app.id if app else None)):
             row = row.model_copy(update={
                 "rating": a.rating, "summary": a.summary, "reasons": a.reasons, "gap": a.gap, "action": a.action,

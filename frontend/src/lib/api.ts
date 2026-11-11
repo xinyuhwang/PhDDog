@@ -261,6 +261,7 @@ export type AssessmentRow = {
   school_name: string;
   application_id: string | null;
   program: string | null;
+  fit_score: number | null;
   rating: AdmissionRating | null;
   summary: string | null;
   reasons: AssessmentReason[];

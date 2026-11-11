@@ -415,6 +415,13 @@ One row per application at a **target school** (D19):
   "suggested"; any edit makes it `user`.
 - **Decision:** undecided / top8 / final5 / drop, with counters for 8 and 5
   and the reach/target/likely mix. Decisions are the user's.
+- **Chance:** the latest admission rating from §4.11, or the tier if the
+  program hasn't been evaluated. It is shown under the tier when the two
+  differ.
+- **Order:** best first, to help decide. Rows are ranked by fit (1–5) plus
+  chance (likely 4, target 3, reach 2, long shot 1). Ties go to the better
+  fit, then the better chance, then the earlier deadline. Dropped programs
+  go last.
 
 ### 4.7 Application tracker (Applications page)
 
@@ -503,6 +510,9 @@ One row per application at a **target school** (D19):
   needs a judgment-capable provider (Claude); offline, the button is
   disabled. Session-written evaluations can be imported with
   `PUT /assessments`.
+- **Order:** Likely, then Target, then Reach, then Long shot, with programs
+  not yet evaluated last. Within a rating, the program with the better fit
+  (from Compare) comes first.
 - **Staleness:** a card is marked out of date when the profile version
   changes, or when a hash of the program's inputs no longer matches.
 

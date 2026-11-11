@@ -96,9 +96,10 @@ export default function AdmissionChances() {
   );
 }
 
+/** Likely → Target → Reach → Long shot → not evaluated; within a rating, better research fit first. */
 function byRating(a: AssessmentRow, b: AssessmentRow) {
   const rank = (r: AssessmentRow) => (r.rating ? ORDER.indexOf(r.rating) : -1);
-  return rank(b) - rank(a) || a.school_name.localeCompare(b.school_name);
+  return rank(b) - rank(a) || (b.fit_score ?? 0) - (a.fit_score ?? 0) || a.school_name.localeCompare(b.school_name);
 }
 
 function ProgramCard({ row }: { row: AssessmentRow }) {

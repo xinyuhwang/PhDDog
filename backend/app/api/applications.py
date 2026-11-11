@@ -10,7 +10,7 @@ from app.api.deps import DB, CurrentUser
 import re
 
 from app.config import get_settings
-from app.db.models import Application, ApplicationStep, Professor, School
+from app.db.models import AdmissionAssessment, Application, ApplicationStep, Professor, School
 from app.services import applications as svc
 from app.services.evidence import cycle_year
 
@@ -285,6 +285,7 @@ class CompareRow(BaseModel):
     status: str
     fit_score: int | None
     tier: str | None
+    chance: str | None = None  # latest admission rating (My profile), else the tier
     reason: str | None
     gaps: str | None
     decision: str
@@ -309,6 +310,11 @@ def compare(db: DB, user: CurrentUser):
                                                 Professor.status != "dismissed")):
         profs_by_school.setdefault(p.school_id, []).append(p)
 
+    ratings = dict(db.execute(
+        select(AdmissionAssessment.application_id, AdmissionAssessment.rating)
+        .where(AdmissionAssessment.application_id.in_([a.id for a in apps]))
+    ).all())
+
     rows = []
     for a in apps:
         ptype = program_type(a.program)
@@ -332,12 +338,22 @@ def compare(db: DB, user: CurrentUser):
         rows.append(CompareRow(
             id=a.id, school_id=a.school_id, school_name=a.school.name, program=a.program, program_type=ptype,
             deadline=a.deadline, days_left=(a.deadline - date.today()).days if a.deadline else None, status=a.status,
-            fit_score=a.fit_score, tier=a.tier, reason=a.reason, gaps=a.gaps, decision=a.decision,
+            fit_score=a.fit_score, tier=a.tier, chance=ratings.get(a.id) or a.tier,
+            reason=a.reason, gaps=a.gaps, decision=a.decision,
             assessment_by=a.assessment_by, faculty=faculty, n_faculty=len(faculty),
             n_in_program=sum(f.in_program for f in faculty), n_recruiting=len(recruiting),
             n_target_cycle=sum(1 for f in recruiting if target and cycle_year(f.recruiting_cycle) and cycle_year(f.recruiting_cycle) >= target),
             n_not_recruiting=sum(f.recruiting_status == "not_recruiting" for f in in_prog),
         ))
-    order = {"final5": 0, "top8": 1, "undecided": 2, "drop": 3}
-    rows.sort(key=lambda r: (order.get(r.decision, 2), -(r.fit_score or 0), r.school_name, r.program))
+    rows.sort(key=compare_rank)
     return rows
+
+
+CHANCE_POINTS = {"likely": 4, "target": 3, "reach": 2, "long_shot": 1}
+
+
+def compare_rank(r: CompareRow) -> tuple:
+    """Best fit + best chance first, to help decide where to apply. Fit (1–5) and chance (1–4) count
+    equally; ties go to the better fit, then the better chance, then the earlier deadline. Dropped last."""
+    fit, chance = r.fit_score or 0, CHANCE_POINTS.get(r.chance or "", 0)
+    return (r.decision == "drop", -(fit + chance), -fit, -chance, r.deadline or date.max, r.school_name, r.program)
