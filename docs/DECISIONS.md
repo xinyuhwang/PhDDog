@@ -485,6 +485,51 @@ in a session can be imported (`PUT /assessments`) under the same evidence
 check and are labeled "Claude (session)". The Claude provider's
 `assess_admission` is not implemented yet, like its other tasks (D7).
 
+### D28. Application Copilot design accepted, with changes to the original proposal (Nov 11)
+
+**Decision.** A Chrome extension that fills application portals from
+verified profile facts, designed in [COPILOT.md](COPILOT.md). The user
+accepted the review's changes to the original proposal (COPILOT.md §2.2)
+and decisions C1–C10 (§12):
+- **C1, C2. One backend, one copy of the data.** The extension is a client
+  of PhDDog's local backend, with no separate stack, auth service or cloud.
+  Profile data lives only in the backend; the extension keeps per-tab state
+  in `chrome.storage.session`.
+- **C3. Facts with sources.** `profile_records` carry provenance,
+  verification, visibility (public, application or private) and history.
+  Derived values, such as a rounded GPA, are computed, never stored as
+  facts, and always reviewed.
+- **C4, C5. Generic form understanding.** Rules, then mappings learned per
+  host and shared across a portal vendor, then one constrained LLM call per
+  section. No per-university code and no embeddings until the benchmark
+  shows a need.
+- **C6. Copy mode first.** The side panel shows and copies verified values
+  before any page writing exists.
+- **C7. Never acts for the applicant.** The extension never submits,
+  certifies, signs, pays, navigates or clicks "Add another", and never
+  fills a sensitive category.
+- **C8. Narrow channel.** Only the background worker calls the backend,
+  with a pairing token. Page HTML never leaves the browser.
+- **C9. Drafting is limited.** Only short-answer fields are drafted, and
+  each draft is validated in code. Drafting is off offline and where a
+  program's AI policy forbids it.
+- **C10. Fixtures.** Snapshots of real portals stay in `data/`; committed
+  fixtures are synthetic.
+
+**Why.** PhDDog already has the backend, tracker, LLM adapter and
+grounding checks the original proposal would have rebuilt. Copy mode helps
+during the December 2026 deadlines; the fill engine likely comes after them.
+
+**Rejected.**
+- A separate FastAPI, OpenAI and AWS stack, and keeping the profile in
+  extension storage.
+- Per-university adapters first, and embedding matching first.
+- Drafting statement-length essays.
+
+**Still open** (COPILOT.md §12): the name ("Copilot" is a Microsoft product
+name), personal tool or product, the first portal to support, and
+generated vs. hand-mirrored TypeScript types.
+
 ---
 
 ## Not doing (and why)
