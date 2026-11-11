@@ -303,7 +303,9 @@ class FakeLLM:
     def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile, name: str = "") -> None:
         not_recruiting = re.compile(
             r"\b(?:not|no longer)\s+(?:\w+ly\s+){0,2}(?:recruiting|accepting|taking|looking for|admitting)\b[^.]{0,60}\b(?:students?|ph\.?\s?d)"
-            r"|\bno (?:open )?(?:positions|openings)\b|\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
+            r"|\bno (?:open )?(?:positions|openings)\b"
+            # "Review continues until positions are filled" means they're still open.
+            r"|(?<!until )(?<!once )\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
             re.I,
         )
         recruiting = re.compile(

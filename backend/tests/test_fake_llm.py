@@ -148,6 +148,7 @@ def test_lab_contact_page_roles():
     ("We are not currently accepting additional Northeastern graduate students.", "not_recruiting"),
     ("PhD Students: I am not currently directly admitting new PhD students without a fellowship.", "not_recruiting"),
     ("Positions in my group have been filled for this cycle; check back next year for PhD students.", "not_recruiting"),
+    ("We are recruiting PhD students. Review begins immediately and continues until positions are filled.", "explicitly_recruiting"),
     ("We have two open positions for PhD students starting Fall 2027.", "explicitly_recruiting"),
     ("We are planning to hire 2~3 PhD students (Fall 2027) who share our passion in ML & Biomedical AI.", "explicitly_recruiting"),
     ("I am also looking for PhD students, especially in but not limited to neural representation learning.", "explicitly_recruiting"),
