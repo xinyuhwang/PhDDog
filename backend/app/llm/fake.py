@@ -303,7 +303,9 @@ class FakeLLM:
     def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile, name: str = "") -> None:
         not_recruiting = re.compile(
             r"\b(?:not|no longer)\s+(?:\w+ly\s+){0,2}(?:recruiting|accepting|taking|looking for|admitting)\b[^.]{0,60}\b(?:students?|ph\.?\s?d)"
-            r"|\bno (?:open )?(?:positions|openings)\b|\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
+            r"|\bno (?:open )?(?:positions|openings)\b"
+            # "Review continues until positions are filled" means they're still open.
+            r"|(?<!until )(?<!once )\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
             re.I,
         )
         recruiting = re.compile(
@@ -332,10 +334,10 @@ class FakeLLM:
 
         phd = _Phd()
         general = re.compile(r"\b(every year|each year|always|frequently|regularly|from time to time)\b", re.I)
-        do_not_email = re.compile(
-            r"\b(cannot|can't|can not|unable to|won't|will not|do not|don't|not able to|not be able to)\s+(?:\w+\s+){0,3}(respond|reply|answer)\b"
-            r"|\b(?:please\s+)?(?:do not|don't)\s+(?:e-?mail|contact)\s+me\b", re.I
+        no_reply = re.compile(
+            r"\b(cannot|can't|can not|unable to|won't|will not|do not|don't|not able to|not be able to)\s+(?:\w+\s+){0,3}(respond|reply|answer)\b", re.I
         )
+        dont_email_me = re.compile(r"\b(?:please\s+)?(?:do not|don't)\s+(?:e-?mail|contact)\s+me\b", re.I)
         # "me", or the professor's own name ("please list Eric Eaton as a prospective advisor").
         who = "|".join(["me", *(re.escape(n) for n in {name, name.split()[-1]} if n)])
         name_me_as_advisor = re.compile(
@@ -347,9 +349,19 @@ class FakeLLM:
         )
         welcomes = re.compile(
             r"\b(?:feel free to|please|welcome to|encouraged to)\s+(?:e-?mail|contact|reach out to|write to)\s+(?:me|us|our lab|the lab|dr\.?\s+\w+|prof(?:essor)?\.?\s+\w+)\b"
-            r"|\bfeel free to reach out\b|\be-?mail me\b|\breach out to me\b",
+            r"|\bfeel free to reach out\b|\be-?mail me\b|\breach out to me\b"
+            r"|\b(?:drop|send|shoot)\s+me\s+(?:an?\s+)?(?:e-?mail|line|note|message)\b",
             re.I,
         )
+
+        class _DoNotEmail:
+            # "Feel free to email me your CV (I can not reply to every email)" invites email; the
+            # no-reply part only warns. An explicit "don't email me" still wins.
+            @staticmethod
+            def search(text: str):
+                return dont_email_me.search(text) or (not welcomes.search(text) and no_reply.search(text))
+
+        do_not_email = _DoNotEmail()
 
         seen: set[tuple[str, str]] = set()
         for p in pages:
@@ -516,6 +528,12 @@ class FakeLLM:
             f"Thank you for your time,\n{user_name}",
         ] if p)
         return EmailOut(subject=f"[FAKE] Prospective PhD student interested in your work at {school}", body=body)
+
+    # --- Admission evaluation ---------------------------------------------------------
+
+    def assess_admission(self, profile, materials, programs):
+        # Keyword rules can't judge admission chances, and a made-up rating would read as real.
+        raise NotImplementedError("Evaluating admission chances needs Claude (LLM_PROVIDER=claude).")
 
 
 # --- module helpers --------------------------------------------------------------------

@@ -148,6 +148,7 @@ def test_lab_contact_page_roles():
     ("We are not currently accepting additional Northeastern graduate students.", "not_recruiting"),
     ("PhD Students: I am not currently directly admitting new PhD students without a fellowship.", "not_recruiting"),
     ("Positions in my group have been filled for this cycle; check back next year for PhD students.", "not_recruiting"),
+    ("We are recruiting PhD students. Review begins immediately and continues until positions are filled.", "explicitly_recruiting"),
     ("We have two open positions for PhD students starting Fall 2027.", "explicitly_recruiting"),
     ("We are planning to hire 2~3 PhD students (Fall 2027) who share our passion in ML & Biomedical AI.", "explicitly_recruiting"),
     ("I am also looking for PhD students, especially in but not limited to neural representation learning.", "explicitly_recruiting"),
@@ -185,3 +186,15 @@ def test_hedged_openings_are_no_claim():
 def test_may_not_be_able_to_respond_is_do_not_email():
     page = PageText(url="https://x.edu/~a/", text="Due to the high volume of emails, I may not be able to respond to every message.")
     assert [c.claim for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims] == ["do_not_email"]
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    # Kai Shu's page: an invitation with a reply caveat.
+    ("Interested students please feel free to drop me an email with your CV and transcript "
+     "(I can not reply to every individual email).", "welcomes_email"),
+    ("Please do not email me about admissions; I cannot reply to every message.", "do_not_email"),
+])
+def test_email_invite_with_reply_caveat(sentence, expected):
+    page = PageText(url="https://x.edu/~a/", text=sentence)
+    claims = [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "contact_policy"]
+    assert [c.claim for c in claims] == [expected]

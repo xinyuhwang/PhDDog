@@ -13,7 +13,7 @@ type Faculty = {
 };
 type Row = {
   id: string; school_id: string; school_name: string; program: string; program_type: string; deadline: string | null; days_left: number | null;
-  status: string; fit_score: number | null; tier: string | null; reason: string | null; gaps: string | null; decision: string;
+  status: string; fit_score: number | null; tier: string | null; chance: string | null; reason: string | null; gaps: string | null; decision: string;
   assessment_by: string | null; faculty: Faculty[]; n_faculty: number; n_in_program: number; n_recruiting: number;
   n_target_cycle: number; n_not_recruiting: number;
 };
@@ -68,6 +68,8 @@ export default function ComparePage() {
         <p className="mb-4 text-sm text-stone-600">
           Faculty and recruiting counts come from the app. Fit, tier, reasons and gaps were <b>suggested by Claude</b> from your resume and the
           evidence; change anything and it becomes yours. Aim for a mix, roughly 2 reach + 2 target + 1 likely.
+          Sorted best first: Fit (1–5) plus chance (Likely 4 · Target 3 · Reach 2 · Long shot 1, from Admission chances on My
+          profile, else the tier). Dropped programs go last.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -112,6 +114,11 @@ export default function ComparePage() {
                         <option value="">–</option><option value="reach">Reach</option><option value="target">Target</option><option value="likely">Likely</option>
                       </select>
                       {r.tier && <div className="mt-1"><Badge tone={TIER_TONE[r.tier]}>{r.tier}</Badge></div>}
+                      {r.chance && r.chance !== r.tier && (
+                        <div className="mt-1 text-xs text-stone-500" title="Latest rating under Admission chances on My profile">
+                          Chance: {r.chance === "long_shot" ? "long shot" : r.chance}
+                        </div>
+                      )}
                     </td>
                     <td className="whitespace-nowrap pr-2 text-xs">
                       {r.deadline ? new Date(`${r.deadline}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"}

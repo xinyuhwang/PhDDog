@@ -8,7 +8,7 @@ import { api, type School } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
 /** Pick the schools you're applying to. Chosen schools get an Applications tracker card. */
-export default function TargetSchools() {
+export default function TargetSchools({ onChange }: { onChange?: () => void }) {
   const { data: schools, reload } = useApi<School[]>("/schools");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +16,7 @@ export default function TargetSchools() {
   async function toggle(s: School) {
     await api.patch(`/schools/${s.id}/target`, { is_target: !s.is_target });
     reload();
+    onChange?.();
   }
 
   async function add() {
@@ -24,6 +25,7 @@ export default function TargetSchools() {
       const s = await api.post<School>("/schools", { name, is_target: true });
       setName("");
       reload();
+      onChange?.();
       if (!s.confirmed) setError(`"${s.name}" wasn't recognized — confirm it on the Add professors page.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

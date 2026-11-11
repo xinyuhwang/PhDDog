@@ -123,3 +123,37 @@ class ConnectionOut(BaseModel):
 class EmailOut(BaseModel):
     subject: str
     body: str
+
+
+AdmissionRating = Literal["long_shot", "reach", "target", "likely"]
+ReasonKind = Literal["profile", "program", "faculty", "admit_pattern", "funding"]
+
+
+class AssessmentReason(BaseModel):
+    text: str  # the reason, in one sentence
+    kind: ReasonKind
+    # profile: a word-for-word quote of the user's materials; faculty: names a professor at the school;
+    # program / admit_pattern / funding: the fact, with source_url.
+    evidence: str
+    source_url: str | None = None
+
+
+class AssessmentOut(BaseModel):
+    rating: AdmissionRating
+    summary: str
+    reasons: list[AssessmentReason]
+    gap: str | None = None
+    action: str | None = None
+
+
+@dataclass
+class ProgramContext:
+    """What the evaluation of one program may draw on."""
+
+    school: str
+    program: str
+    requirements: dict
+    notes: str | None
+    funding: str | None
+    admit_note: str | None
+    faculty: list[str]  # "Name (recruiting status, contact policy)"

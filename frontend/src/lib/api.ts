@@ -243,8 +243,36 @@ export type School = {
   funding_level: "none" | "minor" | "concern" | null;
   funding_note: string | null;
   funding_guarantee: string | null;
+  admit_note: string | null;
   professor_count: number;
 };
+
+export type AdmissionRating = "long_shot" | "reach" | "target" | "likely";
+
+export type AssessmentReason = {
+  text: string;
+  kind: "profile" | "program" | "faculty" | "admit_pattern" | "funding";
+  evidence: string;
+  source_url: string | null;
+};
+
+export type AssessmentRow = {
+  school_id: string;
+  school_name: string;
+  application_id: string | null;
+  program: string | null;
+  fit_score: number | null;
+  rating: AdmissionRating | null;
+  summary: string | null;
+  reasons: AssessmentReason[];
+  gap: string | null;
+  action: string | null;
+  assessed_by: string | null;
+  assessed_at: string | null;
+  stale: string[];
+};
+
+export type Assessments = { can_run: boolean; has_profile: boolean; rows: AssessmentRow[] };
 
 export type AppStep = {
   id: string;

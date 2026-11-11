@@ -47,6 +47,7 @@ class SchoolOut(ORM):
     funding_level: str | None = None
     funding_note: str | None = None
     funding_guarantee: str | None = None
+    admit_note: str | None = None
     professor_count: int = 0
 
 

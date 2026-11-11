@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import applications, meta, outreach, papers, professors, profile, venues
+from app.api import applications, assessments, meta, outreach, papers, professors, profile, venues
 from app.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -17,5 +17,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (meta, profile, professors, papers, outreach, applications, venues):
+for module in (meta, profile, professors, papers, outreach, applications, venues, assessments):
     app.include_router(module.router)

@@ -27,7 +27,7 @@ function DueBadge({ date, done }: { date: string | null; done?: boolean }) {
 
 export default function ApplicationsPage() {
   const apps = useApi<Application[]>("/applications");
-  const todo = useApi<TodoItem[]>("/applications/todo?limit=10");
+  const todo = useApi<TodoItem[]>("/applications/todo?limit=30");
   const schools = useApi<School[]>("/schools");
   const reload = () => { apps.reload(); todo.reload(); };
 
