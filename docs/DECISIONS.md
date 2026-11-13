@@ -530,6 +530,33 @@ during the December 2026 deadlines; the fill engine likely comes after them.
 name), personal tool or product, the first portal to support, and
 generated vs. hand-mirrored TypeScript types.
 
+### D29. Advisor eligibility per professor, set by hand (Nov 13)
+
+**Decision.** Each professor has an `advisor_role` saying whether they can
+be the official advisor in that school's CS PhD:
+- `primary`: can be the official advisor;
+- `co_advisor`: only alongside a primary CS advisor (adjunct, research or
+  courtesy faculty, where the program's rule says so);
+- `outside_cs`: not an advisor option, kept because their work is worth
+  citing as an influence;
+- `unknown`: not checked (the default).
+
+Each role has a note quoting the rule or listing, and a source link. The
+Professors list shows a badge for checked professors and a "Primary
+advisors only" filter. The professor page shows the note and lets you edit
+the role.
+
+**Why.** Rules differ by program and several pasted faculty lists named
+people who can't advise in CS. Dartmouth requires a tenure-track CS
+primary; WashU allows courtesy CSE; Emory's CSI list leaves out some CS
+faculty. Naming an ineligible professor as your intended advisor weakens
+an application.
+
+**Rejected.** Inferring the role from a professor's site or title. The
+rule lives in the program's handbook and people page, not on the
+professor's homepage, and guessing would repeat the mislabels the
+extractor already produces.
+
 ---
 
 ## Not doing (and why)

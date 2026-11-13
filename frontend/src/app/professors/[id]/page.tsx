@@ -5,8 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import OutreachTasks from "@/components/OutreachTasks";
-import { Badge, Button, Card, ErrorNote, FitBadge, inputClass, PinButton, ResolveBadge, StageBadge } from "@/components/ui";
-import { api, type Job, type ProfessorDetail } from "@/lib/api";
+import { ADVISOR_ROLE, AdvisorBadge, Badge, Button, Card, ErrorNote, FitBadge, inputClass, PinButton, ResolveBadge, StageBadge } from "@/components/ui";
+import { api, type AdvisorRole, type Job, type ProfessorDetail } from "@/lib/api";
 import { useApi, useHealth, useShowFit } from "@/lib/hooks";
 
 import EmailPanel from "./EmailPanel";
@@ -49,6 +49,7 @@ export default function ProfessorPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <AdvisorBadge role={prof.advisor_role} />
           <ResolveBadge status={prof.resolve_status} />
           <StageBadge status={prof.status} />
           {prof.status !== "dismissed" && (
@@ -61,6 +62,8 @@ export default function ProfessorPage() {
       </div>
 
       {prof.resolve_status !== "resolved" && <ResolvePanel prof={prof} onChanged={refreshJobs} />}
+
+      <AdvisorPanel prof={prof} onSaved={reload} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <RecruitingPanel prof={prof} targetCycle={health?.target_cycle ?? "your target cycle"} busy={busy}
@@ -121,6 +124,50 @@ function ResolvePanel({ prof, onChanged }: { prof: ProfessorDetail; onChanged: (
         <input className={inputClass} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the homepage URL" />
         <Button disabled={!url} onClick={() => choose(url)}>Use URL</Button>
       </div>
+    </Card>
+  );
+}
+
+// Set by hand from the program's advisor rule and the CS people page; never filled from their site (D29).
+function AdvisorPanel({ prof, onSaved }: { prof: ProfessorDetail; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [role, setRole] = useState<AdvisorRole>(prof.advisor_role);
+  const [note, setNote] = useState(prof.advisor_note ?? "");
+  const [source, setSource] = useState(prof.advisor_source_url ?? "");
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    try {
+      await api.patch(`/professors/${prof.id}`, { advisor_role: role, advisor_note: note || null, advisor_source_url: source || null });
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+  return (
+    <Card title="Advisor eligibility (CS PhD)" actions={<Button variant="secondary" onClick={() => setEditing(!editing)}>{editing ? "Close" : "Edit"}</Button>}>
+      {editing ? (
+        <div className="space-y-3 text-sm">
+          <select className={`${inputClass} w-64 py-1`} value={role} onChange={(e) => setRole(e.target.value as AdvisorRole)}>
+            {Object.entries(ADVISOR_ROLE).map(([value, [, label]]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <textarea className={`${inputClass} h-20`} placeholder="Why: the program's rule and how they're listed" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className={inputClass} placeholder="Source link (people page or handbook)" value={source} onChange={(e) => setSource(e.target.value)} />
+          <Button onClick={save}>Save</Button>
+          <ErrorNote error={error} />
+        </div>
+      ) : (
+        <div className="space-y-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <AdvisorBadge role={prof.advisor_role} showUnknown />
+            <span className="text-xs text-stone-500">{ADVISOR_ROLE[prof.advisor_role]?.[2]}</span>
+          </div>
+          {prof.advisor_note && <p className="text-stone-700">{prof.advisor_note}</p>}
+          {prof.advisor_source_url && (
+            <a className="text-xs text-indigo-600 hover:underline" href={prof.advisor_source_url} target="_blank" rel="noreferrer">Source ↗</a>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

@@ -86,6 +86,8 @@ def get_detail(professor_id: uuid.UUID, db: DB, user: CurrentUser):
 def patch(professor_id: uuid.UUID, body: ProfessorPatch, db: DB, user: CurrentUser):
     prof = get_professor(db, user, professor_id)
     changes = body.model_dump(exclude_unset=True)
+    if "advisor_role" in changes and changes["advisor_role"] is None:
+        changes["advisor_role"] = "unknown"
     for field, value in changes.items():
         setattr(prof, field, value)
     # Pinning an early-stage professor also moves the stage; later stages keep theirs.

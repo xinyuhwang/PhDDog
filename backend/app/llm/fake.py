@@ -324,7 +324,9 @@ class FakeLLM:
             r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*|"
             r"visiting\s+(?:\w+\s+)?(?:students?|scholars?|researchers?)"
             # "For students currently at Emory" is about research spots for enrolled students.
-            r"|students?\s+(?:who are\s+)?currently\s+(?:at|enrolled)|current\s+(?:\w+\s+)?students)\b", re.I
+            r"|students?\s+(?:who are\s+)?currently\s+(?:at|enrolled)|current\s+(?:\w+\s+)?students"
+            # "If you are already a student at Dartmouth College, please contact me" is for enrolled students.
+            r"|already\s+(?:a\s+)?students?\s+(?:at|in|of))\b", re.I
         )
         phd_re = re.compile(r"\b(ph\.?\s?d|doctoral|graduate students?)\b", re.I)
         # "our PhD students" are the lab's current members, not applicants.

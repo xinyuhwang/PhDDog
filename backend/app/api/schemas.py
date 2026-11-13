@@ -110,6 +110,9 @@ class ProfessorSummary(ORM):
     notes: str | None = None
     pinned: bool = False
     status: str
+    advisor_role: str = "unknown"
+    advisor_note: str | None = None
+    advisor_source_url: str | None = None
     screen: ScreenOut | None = None
 
 
@@ -161,6 +164,9 @@ class ProfessorPatch(BaseModel):
     status: str | None = None
     notes: str | None = None
     pinned: bool | None = None
+    advisor_role: Literal["primary", "co_advisor", "outside_cs", "unknown"] | None = None
+    advisor_note: str | None = None
+    advisor_source_url: str | None = None
 
 
 class HomepageIn(BaseModel):

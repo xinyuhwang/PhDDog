@@ -208,6 +208,14 @@ def test_email_for_paper_copies_is_not_a_contact_policy():
     assert claims == []
 
 
+def test_email_invite_for_enrolled_students_is_not_a_contact_policy():
+    page = PageText(url="https://x.edu/~a/", text=(
+        "Prospective PhD students: Please submit your application to the Computer Science program. "
+        "If you are already a student at Dartmouth College, please contact me via email."))
+    claims = [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "contact_policy"]
+    assert claims == []
+
+
 @pytest.mark.parametrize("sentence, expected", [
     ("I am not able to take on more PhD students this year.", ["not_recruiting"]),
     ("Unfortunately, I cannot accept new PhD students for Fall 2027.", ["not_recruiting"]),

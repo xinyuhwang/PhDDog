@@ -103,6 +103,17 @@ def test_full_flow(client):
     run_jobs()
     assert client.get(f"/professors/{pid}").json()["title"] == "Professor (edited)"
 
+    # Advisor role is set by hand, kept through a refresh, and limited to the known values.
+    assert prof["advisor_role"] == "unknown"
+    role = {"advisor_role": "co_advisor", "advisor_note": "Adjunct in CS", "advisor_source_url": "https://cs.example.edu/people"}
+    assert client.patch(f"/professors/{pid}", json=role).json()["advisor_role"] == "co_advisor"
+    client.post(f"/professors/{pid}/refresh")
+    run_jobs()
+    after = client.get(f"/professors/{pid}").json()
+    assert (after["advisor_role"], after["advisor_note"]) == ("co_advisor", "Adjunct in CS")
+    assert client.patch(f"/professors/{pid}", json={"advisor_role": "maybe"}).status_code == 422
+    assert client.patch(f"/professors/{pid}", json={"advisor_role": None}).json()["advisor_role"] == "unknown"
+
     paper = client.post(f"/professors/{pid}/papers/pdf", files={"file": ("p.pdf", make_pdf(PAPER), "application/pdf")}).json()
     assert paper["text_status"] == "full"
     run_jobs()
