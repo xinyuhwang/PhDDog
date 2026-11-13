@@ -198,3 +198,23 @@ def test_email_invite_with_reply_caveat(sentence, expected):
     page = PageText(url="https://x.edu/~a/", text=sentence)
     claims = [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "contact_policy"]
     assert [c.claim for c in claims] == [expected]
+
+
+def test_email_for_paper_copies_is_not_a_contact_policy():
+    page = PageText(url="https://x.edu/~a/", text=(
+        "If you'd like a copy of a paper that isn't linked here, or a book chapter or abstract, "
+        "feel free to email me at a@x.edu."))
+    claims = [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "contact_policy"]
+    assert claims == []
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    ("I am not able to take on more PhD students this year.", ["not_recruiting"]),
+    ("Unfortunately, I cannot accept new PhD students for Fall 2027.", ["not_recruiting"]),
+    # About enrolled students looking for research projects, not PhD admissions.
+    ("For students currently at Emory: unfortunately, I am not able to take on more students at this time.", []),
+])
+def test_not_able_to_take_students(sentence, expected):
+    page = PageText(url="https://x.edu/~a/", text=sentence)
+    claims = [c for c in llm.extract_profile([page], "Ann Lee", "x.edu").claims if c.kind == "recruiting"]
+    assert [c.claim for c in claims] == expected

@@ -302,7 +302,8 @@ class FakeLLM:
 
     def _extract_recruiting(self, pages: list[PageText], out: ExtractedProfile, name: str = "") -> None:
         not_recruiting = re.compile(
-            r"\b(?:not|no longer)\s+(?:\w+ly\s+){0,2}(?:recruiting|accepting|taking|looking for|admitting)\b[^.]{0,60}\b(?:students?|ph\.?\s?d)"
+            r"\b(?:not|no longer|unable to|cannot|can't)\s+(?:able to\s+)?(?:\w+ly\s+){0,2}"
+            r"(?:recruiting|accepting|accept|taking|take on|take|looking for|admitting|admit)\b[^.]{0,60}\b(?:students?|ph\.?\s?d)"
             r"|\bno (?:open )?(?:positions|openings)\b"
             # "Review continues until positions are filled" means they're still open.
             r"|(?<!until )(?<!once )\b(?:openings|positions)\b[^.]{0,40}\b(?:are|have been) filled\b",
@@ -321,7 +322,9 @@ class FakeLLM:
         # Recruiting statements about other roles say nothing about PhD openings.
         other_roles = re.compile(
             r"\b(post-?docs?|postdoctoral|undergrad\w*|master['’]?s|ms students|interns?|staff|engineers?|collaborat\w*|"
-            r"visiting\s+(?:\w+\s+)?(?:students?|scholars?|researchers?))\b", re.I
+            r"visiting\s+(?:\w+\s+)?(?:students?|scholars?|researchers?)"
+            # "For students currently at Emory" is about research spots for enrolled students.
+            r"|students?\s+(?:who are\s+)?currently\s+(?:at|enrolled)|current\s+(?:\w+\s+)?students)\b", re.I
         )
         phd_re = re.compile(r"\b(ph\.?\s?d|doctoral|graduate students?)\b", re.I)
         # "our PhD students" are the lab's current members, not applicants.
@@ -386,7 +389,12 @@ class FakeLLM:
                     seen.add(("recruiting", s))
                     out.claims.append(Claim(kind="recruiting", claim=recruit, cycle=cycle, quote=s, source_url=p.url))
 
-                about_other_roles = bool(other_roles.search(s) and not phd.search(s))
+                # "Feel free to email me for a copy of a paper that isn't linked here" is about papers,
+                # not about prospective students, so it sets no contact policy.
+                about_papers = re.search(
+                    r"\b(?:copy|copies|reprints?|pdfs?)\b[^.]{0,60}\b(?:paper|article|chapter|abstract|publication)s?\b", s, re.I
+                )
+                about_other_roles = bool(other_roles.search(s) and not phd.search(s)) or bool(about_papers)
                 # "If you plan to apply to the program …, please email me" invites email; applying is the condition.
                 conditional_apply = re.search(r"\bif you\b[^.]{0,40}\bapply", s, re.I) and welcomes.search(s)
                 for policy, pattern in (
