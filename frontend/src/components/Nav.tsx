@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/compare", label: "Compare" },
   { href: "/applications", label: "Applications" },
   { href: "/publishing", label: "Publishing" },
+  { href: "/fees", label: "Fees" },
 ];
 
 export default function Nav() {
