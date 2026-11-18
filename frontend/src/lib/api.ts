@@ -89,8 +89,14 @@ export type ProfessorSummary = {
   notes: string | null;
   pinned: boolean;
   status: string;
+  advisor_role: AdvisorRole;
+  advisor_note: string | null;
+  advisor_source_url: string | null;
   screen: Screen | null;
 };
+
+// Can they be the official advisor in the school's CS PhD? Set by hand only (D29).
+export type AdvisorRole = "primary" | "co_advisor" | "outside_cs" | "unknown";
 
 export type Candidate = { id: string; url: string; source: string; confidence: number | null; reason: string | null; chosen: boolean };
 

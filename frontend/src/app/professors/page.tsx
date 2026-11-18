@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 
-import { Button, Card, ContactBadge, ErrorNote, FitBadge, PinButton, RecruitingBadge, ResolveBadge, StageBadge, inputClass } from "@/components/ui";
+import { AdvisorBadge, Button, Card, ContactBadge, ErrorNote, FitBadge, PinButton, RecruitingBadge, ResolveBadge, StageBadge, inputClass } from "@/components/ui";
 import { api, type Job, type ProfessorSummary, type Profile } from "@/lib/api";
 import { useApi, useShowFit } from "@/lib/hooks";
 
@@ -28,6 +28,7 @@ export default function ProfessorsPage() {
   const [sort, setSort] = useState<SortKey>("fit");
   const [school, setSchool] = useState("");
   const [hideDismissed, setHideDismissed] = useState(true);
+  const [primaryOnly, setPrimaryOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [screenError, setScreenError] = useState<string | null>(null);
   const { data: profile } = useApi<Profile | null>("/profile");
@@ -38,6 +39,7 @@ export default function ProfessorsPage() {
     let list = profs.data ?? [];
     if (school) list = list.filter((p) => p.school_name === school);
     if (hideDismissed) list = list.filter((p) => p.status !== "dismissed");
+    if (primaryOnly) list = list.filter((p) => p.advisor_role === "primary");
     if (query) list = list.filter((p) => `${p.name} ${p.department ?? ""} ${p.notes ?? ""}`.toLowerCase().includes(query.toLowerCase()));
     const key = (p: ProfessorSummary) => [groupOf(p), strongMatch(p) ? 0 : 1, ...({
       fit: [FIT_ORDER[p.screen?.label ?? ""] ?? 3, -(p.screen?.score ?? 0)],
@@ -50,7 +52,7 @@ export default function ProfessorsPage() {
       for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
       return 0;
     });
-  }, [profs.data, sortBy, school, hideDismissed, query]);
+  }, [profs.data, sortBy, school, hideDismissed, primaryOnly, query]);
 
   const schools = [...new Set(profs.data?.map((p) => p.school_name))].sort();
   const screening = jobs.data?.some((j) => j.kind === "screen_all" && j.status !== "failed");
@@ -87,6 +89,9 @@ export default function ProfessorsPage() {
           </select>
         </label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={hideDismissed} onChange={(e) => setHideDismissed(e.target.checked)} /> Hide dismissed</label>
+        <label className="flex items-center gap-1" title="Only professors checked as able to be your official advisor in the school's CS PhD">
+          <input type="checkbox" checked={primaryOnly} onChange={(e) => setPrimaryOnly(e.target.checked)} /> Primary advisors only
+        </label>
       </div>
 
       {!profs.data?.length ? (
@@ -110,6 +115,9 @@ export default function ProfessorsPage() {
                 <tr className={`border-t border-stone-100 align-top ${p.status === "dismissed" ? "opacity-50" : ""}`}>
                   <td className="py-2.5 pr-3">
                     <Link href={`/professors/${p.id}`} className="font-medium text-stone-900 hover:text-indigo-700">{p.name}</Link>
+                    {p.advisor_role !== "unknown" && (
+                      <span className="ml-2 align-middle"><AdvisorBadge role={p.advisor_role} /></span>
+                    )}
                     <div className="text-xs text-stone-500">{[p.title, p.department, p.school_name].filter(Boolean).join(" · ")}</div>
                     {p.notes && (
                       <div className={`mt-1 max-w-md text-xs ${strongMatch(p) ? "font-medium text-indigo-800" : "text-stone-600"}`}>

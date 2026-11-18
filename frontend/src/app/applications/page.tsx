@@ -193,6 +193,9 @@ function ApplicationCard({ app, onChanged }: { app: Application; onChanged: () =
         {app.requirements.faculty_in_app && app.requirements.faculty_in_app !== "unknown" && (
           <p className="text-xs text-stone-600"><span className="font-medium">Naming faculty: </span>{app.requirements.faculty_in_app}</p>
         )}
+        {app.requirements.ai_policy && (
+          <p className="text-xs text-stone-600"><span className="font-medium">AI use: </span>{app.requirements.ai_policy}</p>
+        )}
 
         <div>
           <div className="mb-1 flex justify-between text-xs text-stone-600">

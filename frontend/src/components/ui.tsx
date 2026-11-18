@@ -82,6 +82,20 @@ export function ContactBadge({ policy }: { policy: string }) {
   return <Badge tone={tone}>{text}</Badge>;
 }
 
+export const ADVISOR_ROLE: Record<string, [Tone, string, string]> = {
+  primary: ["green", "Primary advisor", "Can be your official advisor in this school's CS PhD"],
+  co_advisor: ["yellow", "Co-advisor only", "Can advise only alongside a primary CS advisor"],
+  outside_cs: ["gray", "Outside CS", "Not an advisor option in the CS PhD; cite their work instead"],
+  unknown: ["gray", "Not checked", "Advisor eligibility hasn't been checked"],
+};
+
+// Shows nothing for "unknown" unless asked, so unchecked professors don't add noise to the list.
+export function AdvisorBadge({ role, showUnknown = false }: { role: string; showUnknown?: boolean }) {
+  if (role === "unknown" && !showUnknown) return null;
+  const [tone, text, title] = ADVISOR_ROLE[role] ?? ["gray", role, ""];
+  return <Badge tone={tone} title={title}>{text}</Badge>;
+}
+
 export function ResolveBadge({ status }: { status: string }) {
   const [tone, text] = RESOLVE[status] ?? ["gray", status];
   return <Badge tone={tone}>{text}</Badge>;

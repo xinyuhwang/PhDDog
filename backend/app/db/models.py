@@ -129,6 +129,13 @@ class Professor(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String, default="added")
     notes: Mapped[str | None] = mapped_column(Text)
 
+    # Can this professor be the official advisor in the school's CS PhD? Set by hand only, from the
+    # program's own rule and the department's people page (D29). Never extracted from pages.
+    # primary | co_advisor (only alongside a CS primary) | outside_cs (cite their work, not an advisor) | unknown
+    advisor_role: Mapped[str] = mapped_column(String, default="unknown", server_default="unknown")
+    advisor_note: Mapped[str | None] = mapped_column(Text)
+    advisor_source_url: Mapped[str | None] = mapped_column(String)
+
     school: Mapped[School] = relationship(back_populates="professors")
     candidates: Mapped[list["HomepageCandidate"]] = relationship(
         back_populates="professor", cascade="all, delete-orphan", order_by="HomepageCandidate.rank"

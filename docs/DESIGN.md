@@ -805,6 +805,8 @@ The app is usable for real outreach after **M5**.
 
 ## 11. Future work
 
+- Application Copilot: a Chrome extension that fills application portals
+  from verified profile facts. Proposed design in [COPILOT.md](COPILOT.md).
 - Gmail/Outlook integration: send from the app, find replies automatically,
   follow-up reminders.
 - Automatic paper suggestions (OpenAlex / Semantic Scholar) for the user to
